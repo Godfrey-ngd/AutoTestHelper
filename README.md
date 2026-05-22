@@ -7,7 +7,7 @@
 | **AutoTestDesign** (`autotestdesign/`) | AI-driven **test design** tool you build (FR 1.0–3.0, 6.0 + interactive review) |
 | **Target app** (`target-app/`) | **System under test** — simple login Web module |
 | **Target app tests** (`target-app-tests/`) | Playwright scripts that **execute** tests on the login module |
-| **docs/** | Report drafts + **[用户使用手册](docs/用户使用手册.md)**（Import 填写说明与 Web 操作） |
+| **docs/** | Report drafts + **[用户使用手册](docs/用户使用手册.md)** + **[项目模板](docs/project-templates.md)** |
 
 ## Quick start (Conda 推荐)
 

@@ -1,0 +1,9 @@
+id,text
+REQ-001,Email shall match valid email format and be unique in the system
+REQ-002,Password shall be 8 to 32 characters with at least one uppercase one lowercase and one digit
+REQ-003,Confirm password shall match password field
+REQ-004,Empty email shall show error Email is required
+REQ-005,Empty password shall show error Password is required
+REQ-006,Duplicate email shall show error Email already registered
+REQ-007,Valid registration shall redirect to login page with success message
+REQ-008,Password without uppercase letter shall show error Password policy not met

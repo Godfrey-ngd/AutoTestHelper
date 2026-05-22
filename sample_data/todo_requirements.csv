@@ -1,0 +1,9 @@
+id,text
+REQ-001,Task title shall be between 1 and 100 characters
+REQ-002,Empty task title shall show error Title is required
+REQ-003,User shall create a new task and see it in the list
+REQ-004,User shall mark a task as completed and show strikethrough style
+REQ-005,User shall delete a task and remove it from the list
+REQ-006,When 50 active tasks exist creating another shall show error Task limit reached
+REQ-007,Completing a non-existent task id shall show error Task not found
+REQ-008,Deleting a completed task shall remove it from both active and completed views

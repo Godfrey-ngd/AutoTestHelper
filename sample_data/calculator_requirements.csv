@@ -1,0 +1,9 @@
+id,text
+REQ-001,The system shall accept numeric operand A in range -999 to 999
+REQ-002,The system shall accept numeric operand B in range -999 to 999
+REQ-003,The system shall support operators add subtract multiply divide
+REQ-004,Division by zero shall display error Cannot divide by zero
+REQ-005,Empty operand A shall display error Operand A is required
+REQ-006,Empty operand B shall display error Operand B is required
+REQ-007,Valid expression 12 add 3 shall display result 15
+REQ-008,Non-numeric input shall display error Invalid number
