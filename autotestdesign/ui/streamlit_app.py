@@ -1,0 +1,471 @@
+"""AutoTestDesign Streamlit UI - interactive test design review."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from autotestdesign.core.exporters.export import export_csv, export_json_bytes
+from autotestdesign.core.llm_client import has_llm
+from autotestdesign.core.optimizer.suite_optimizer import optimize_suite
+from autotestdesign.core.oracle.oracle_generator import generate_oracle
+from autotestdesign.core.pipeline import (
+    import_requirements,
+    regenerate_for_requirement,
+    run_full_pipeline,
+    run_risk,
+    run_structure,
+    run_techniques,
+    add_whitebox,
+)
+from autotestdesign.core.review import log_review
+from autotestdesign.models.schemas import (
+    CoverageItem,
+    Priority,
+    Project,
+    Requirement,
+    TestCase,
+    TestStrategy,
+)
+from autotestdesign.storage.project_store import ProjectStore
+
+SAMPLE_REQ = """REQ-001,The system shall accept username between 3 and 20 characters
+REQ-002,The system shall accept password between 8 and 32 characters with at least one digit
+REQ-003,Empty username shall show error message username is required
+REQ-004,Empty password shall show error message password is required
+REQ-005,Valid credentials user01 and Pass1234 shall redirect to success page
+REQ-006,Invalid credentials shall show error invalid credentials
+REQ-007,After three failed login attempts the account shall be locked for 30 seconds
+"""
+
+
+def _get_store() -> ProjectStore:
+    return ProjectStore(ROOT / "data" / "projects")
+
+
+def _load_project() -> Project | None:
+    pid = st.session_state.get("project_id")
+    if not pid:
+        return None
+    return _get_store().load(pid)
+
+
+def _save_project(project: Project) -> None:
+    _get_store().save(project)
+    st.session_state["project_id"] = project.id
+
+
+def _init_state() -> None:
+    if "project_id" not in st.session_state:
+        st.session_state["project_id"] = None
+    if "metrics" not in st.session_state:
+        st.session_state["metrics"] = {}
+
+
+def page_sidebar() -> None:
+    st.sidebar.title("AutoTestDesign")
+    st.sidebar.caption("AI-driven test design (ISTQB / ISO 29119-4)")
+    if has_llm():
+        st.sidebar.success("LLM enabled")
+    else:
+        st.sidebar.warning("Rule-based fallback (set OPENAI_API_KEY)")
+
+    store = _get_store()
+    ids = store.list_ids()
+    if ids:
+        sel = st.sidebar.selectbox("Open project", ids, key="open_proj")
+        if st.sidebar.button("Load project"):
+            st.session_state["project_id"] = sel
+            st.rerun()
+
+    with st.sidebar.expander("New project"):
+        name = st.text_input("Project name", "Login Module Test")
+        desc = st.text_area("Target app", "Web login module (username/password)")
+        if st.button("Create project"):
+            p = Project(name=name, target_app_description=desc)
+            store.save(p)
+            st.session_state["project_id"] = p.id
+            st.rerun()
+
+
+def tab_import(project: Project) -> Project:
+    st.subheader("1. Import & Parse (FR 1.0 / 1.1)")
+    source = st.radio("Source", ["Paste", "Sample login requirements"], horizontal=True)
+    if source == "Sample login requirements":
+        content = SAMPLE_REQ
+        st.code(content)
+    else:
+        content = st.text_area("Requirements (CSV id,text or one per line)", height=200)
+    fmt = st.selectbox("Format hint", ["auto", "csv", "text"])
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("Import only"):
+            project = import_requirements(project, content, fmt)
+            _save_project(project)
+            st.success(f"Imported {len(project.requirements)} requirements")
+    with c2:
+        if st.button("Import + Structure"):
+            project = import_requirements(project, content, fmt)
+            project, ms = run_structure(project)
+            st.session_state["metrics"]["structure_ms"] = ms
+            _save_project(project)
+            st.success(f"Structured in {ms:.0f} ms")
+    with c3:
+        if st.button("Run full pipeline"):
+            project = import_requirements(project, content, fmt)
+            project, metrics = run_full_pipeline(project)
+            st.session_state["metrics"] = {
+                "structure_ms": metrics.structure_ms,
+                "risk_ms": metrics.risk_ms,
+                "techniques_ms": metrics.techniques_ms,
+            }
+            _save_project(project)
+            st.success("Pipeline complete")
+    if project.requirements:
+        rows = [
+            {
+                "id": r.id,
+                "title": r.title,
+                "inputs": ", ".join(r.structured.inputs),
+                "ranges": ", ".join(r.structured.data_ranges),
+                "conditions": ", ".join(r.structured.conditions[:2]),
+            }
+            for r in project.requirements
+        ]
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    return project
+
+
+def tab_risk(project: Project) -> Project:
+    st.subheader("2. Risk & Priority (FR 2.0)")
+    if st.button("Assess risks"):
+        project, ms = run_risk(project)
+        st.session_state["metrics"]["risk_ms"] = ms
+        _save_project(project)
+    if project.risks:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "requirement_id": r.requirement_id,
+                        "score": r.score,
+                        "priority": r.priority.value,
+                        "reason": r.reason,
+                    }
+                    for r in project.risks
+                ]
+            ),
+            use_container_width=True,
+        )
+    return project
+
+
+def tab_coverage(project: Project) -> Project:
+    st.subheader("3. Coverage Items (Interactive)")
+    if st.button("Generate test cases (FR 3.0)"):
+        if not project.risks:
+            project, _ = run_risk(project)
+        project, ms = run_techniques(project)
+        st.session_state["metrics"]["techniques_ms"] = ms
+        _save_project(project)
+        st.success(f"Generated {len(project.test_cases)} cases in {ms:.0f} ms")
+
+    if project.coverage_items:
+        df = pd.DataFrame([c.model_dump() for c in project.coverage_items])
+        edited = st.data_editor(df, num_rows="dynamic", key="cov_editor")
+        if st.button("Save coverage edits"):
+            old = {c.id: c for c in project.coverage_items}
+            new_items = []
+            for _, row in edited.iterrows():
+                cid = str(row.get("id", ""))
+                item = CoverageItem(
+                    id=cid or CoverageItem().id,
+                    requirement_id=str(row.get("requirement_id", "")),
+                    item_type=str(row.get("item_type", "")),
+                    description=str(row.get("description", "")),
+                )
+                if cid in old and old[cid].description != item.description:
+                    log_review(
+                        project,
+                        "CoverageItem",
+                        cid,
+                        "description",
+                        old[cid].description,
+                        item.description,
+                    )
+                new_items.append(item)
+            project.coverage_items = new_items
+            _save_project(project)
+            st.success("Coverage items saved")
+    return project
+
+
+def tab_strategy(project: Project) -> Project:
+    st.subheader("4. Test Strategy")
+    if not project.strategies and st.button("Create default strategies"):
+        project.strategies = [
+            TestStrategy(
+                technique="EP",
+                rationale="Equivalence partitioning for input classes",
+                requirement_ids=[r.id for r in project.requirements],
+            ),
+            TestStrategy(
+                technique="BVA",
+                rationale="Boundary values on length constraints",
+                requirement_ids=[r.id for r in project.requirements],
+            ),
+            TestStrategy(
+                technique="DecisionTable",
+                rationale="Condition combinations for login",
+                requirement_ids=[r.id for r in project.requirements],
+            ),
+        ]
+        _save_project(project)
+    if project.strategies:
+        df = pd.DataFrame(
+            [
+                {
+                    "id": s.id,
+                    "technique": s.technique,
+                    "rationale": s.rationale,
+                    "requirements": ",".join(s.requirement_ids),
+                }
+                for s in project.strategies
+            ]
+        )
+        edited = st.data_editor(df, num_rows="dynamic", key="str_editor")
+        if st.button("Save strategy edits"):
+            new_s = []
+            for _, row in edited.iterrows():
+                new_s.append(
+                    TestStrategy(
+                        id=str(row.get("id", TestStrategy().id)),
+                        technique=str(row.get("technique", "")),
+                        rationale=str(row.get("rationale", "")),
+                        requirement_ids=str(row.get("requirements", "")).split(",")
+                        if row.get("requirements")
+                        else [],
+                    )
+                )
+            project.strategies = new_s
+            _save_project(project)
+    return project
+
+
+def tab_cases(project: Project) -> Project:
+    st.subheader("5. Test Cases (Interactive)")
+    req_ids = [r.id for r in project.requirements]
+    sel_req = st.selectbox("Regenerate for requirement", req_ids or ["—"])
+    if st.button("Regenerate cases for selected requirement") and req_ids:
+        project = regenerate_for_requirement(project, sel_req)
+        _save_project(project)
+        st.success("Regenerated")
+
+    if project.test_cases:
+        rows = []
+        for tc in project.test_cases:
+            rows.append(
+                {
+                    "id": tc.id,
+                    "requirement_id": tc.requirement_id,
+                    "title": tc.title,
+                    "technique": tc.technique,
+                    "priority": tc.priority.value,
+                    "steps": " | ".join(tc.steps),
+                    "test_data": str(tc.test_data),
+                    "expected": tc.expected,
+                }
+            )
+        edited = st.data_editor(
+            pd.DataFrame(rows), num_rows="dynamic", use_container_width=True, key="tc_editor"
+        )
+        if st.button("Save test case edits"):
+            new_cases = []
+            old = {t.id: t for t in project.test_cases}
+            for _, row in edited.iterrows():
+                tid = str(row.get("id", ""))
+                pr = Priority(str(row.get("priority", "M")))
+                tc = TestCase(
+                    id=tid or TestCase().id,
+                    requirement_id=str(row.get("requirement_id", "")),
+                    title=str(row.get("title", "")),
+                    technique=str(row.get("technique", "")),
+                    priority=pr,
+                    steps=str(row.get("steps", "")).split(" | "),
+                    test_data=old[tid].test_data if tid in old else {},
+                    expected=str(row.get("expected", "")),
+                )
+                if tid in old and old[tid].expected != tc.expected:
+                    log_review(
+                        project, "TestCase", tid, "expected", old[tid].expected, tc.expected
+                    )
+                new_cases.append(tc)
+            project.test_cases = new_cases
+            _save_project(project)
+
+    with st.expander("FR 5.0 Test Oracle"):
+        if project.requirements:
+            r0 = project.requirements[0]
+            td = st.text_input("username", "user01")
+            pd_in = st.text_input("password", "Pass1234")
+            if st.button("Generate expected result"):
+                exp = generate_oracle(r0, {"username": td, "password": pd_in})
+                st.info(exp)
+    return project
+
+
+def tab_trace(project: Project) -> None:
+    st.subheader("6. Traceability Matrix")
+    if not project.requirements:
+        st.info("Import requirements first")
+        return
+    matrix = []
+    for r in project.requirements:
+        covs = [c for c in project.coverage_items if c.requirement_id == r.id]
+        cases = [t for t in project.test_cases if t.requirement_id == r.id]
+        matrix.append(
+            {
+                "requirement": r.id,
+                "coverage_count": len(covs),
+                "case_count": len(cases),
+                "techniques": ", ".join(sorted({t.technique for t in cases})),
+            }
+        )
+    st.dataframe(pd.DataFrame(matrix), use_container_width=True)
+    if project.trace_links:
+        st.caption(f"{len(project.trace_links)} trace links")
+
+
+def tab_improve(project: Project) -> Project:
+    st.subheader("7. Evidence-based Improvement")
+    st.caption("Review log captures designer changes for audit trail")
+    if project.review_events:
+        st.dataframe(
+            pd.DataFrame([e.model_dump() for e in project.review_events]),
+            use_container_width=True,
+        )
+    else:
+        st.info("Edit coverage or test cases to record review events")
+
+    if st.button("Add improvement test case (manual)"):
+        req_id = project.requirements[0].id if project.requirements else ""
+        tc = TestCase(
+            requirement_id=req_id,
+            title="IMPROVED: Session timeout after login",
+            technique="EP",
+            priority=Priority.HIGH,
+            steps=["Login successfully", "Idle 30 minutes", "Perform action"],
+            expected="Redirect to login with session expired message",
+        )
+        log_review(
+            project,
+            "TestCase",
+            tc.id,
+            "created",
+            "",
+            tc.title,
+            note="Evidence-based improvement",
+        )
+        project.test_cases.append(tc)
+        _save_project(project)
+        st.success("Added improvement case")
+    return project
+
+
+def tab_export(project: Project) -> None:
+    st.subheader("8. Export (FR 6.0)")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button(
+            "Download JSON",
+            export_json_bytes(project),
+            file_name=f"{project.name.replace(' ', '_')}.json",
+            mime="application/json",
+        )
+    with c2:
+        st.download_button(
+            "Download CSV",
+            export_csv(project),
+            file_name=f"{project.name.replace(' ', '_')}_cases.csv",
+            mime="text/csv",
+        )
+
+    st.subheader("Optional: FR 4.0 / FR 7.0")
+    if st.button("Add white-box state model (FR 4.0)"):
+        project = add_whitebox(project)
+        _save_project(project)
+        st.success("State model added")
+    if project.state_diagram:
+        st.markdown(project.state_diagram)
+
+    if st.button("Optimize suite by risk (FR 7.0)"):
+        project.optimized_case_ids = optimize_suite(project)
+        _save_project(project)
+        st.write(f"Optimized order: {len(project.optimized_case_ids)} unique cases")
+
+    m = st.session_state.get("metrics", {})
+    if m:
+        st.metric("Structure ms", f"{m.get('structure_ms', 0):.0f}")
+        st.metric("Risk ms", f"{m.get('risk_ms', 0):.0f}")
+        st.metric("Techniques ms", f"{m.get('techniques_ms', 0):.0f}")
+
+
+def main() -> None:
+    st.set_page_config(page_title="AutoTestDesign", layout="wide")
+    _init_state()
+    page_sidebar()
+    project = _load_project()
+    if not project:
+        st.title("AutoTestDesign")
+        st.info("Create or load a project from the sidebar.")
+        st.markdown(
+            """
+**Workflow:** Import → Structure → Risk → Generate cases → Review → Export
+
+Target application for this assignment: **Login Web Module** (`target-app/`)
+            """
+        )
+        return
+
+    st.title(project.name)
+    st.caption(project.target_app_description)
+
+    tabs = st.tabs(
+        [
+            "Import",
+            "Risk",
+            "Coverage",
+            "Strategy",
+            "Test Cases",
+            "Traceability",
+            "Improvement",
+            "Export",
+        ]
+    )
+    handlers = [
+        tab_import,
+        tab_risk,
+        tab_coverage,
+        tab_strategy,
+        tab_cases,
+        tab_trace,
+        tab_improve,
+        tab_export,
+    ]
+    for tab, fn in zip(tabs, handlers):
+        with tab:
+            if fn is tab_trace:
+                fn(project)
+            else:
+                project = fn(project)
+
+
+if __name__ == "__main__":
+    main()

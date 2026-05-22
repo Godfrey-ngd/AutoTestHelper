@@ -1,0 +1,8 @@
+id,text
+REQ-001,The system shall accept username between 3 and 20 characters
+REQ-002,The system shall accept password between 8 and 32 characters with at least one digit
+REQ-003,Empty username shall show error message username is required
+REQ-004,Empty password shall show error message password is required
+REQ-005,Valid credentials user01 and Pass1234 shall redirect to success page
+REQ-006,Invalid credentials shall show error invalid credentials
+REQ-007,After three failed login attempts the account shall be locked for 30 seconds
