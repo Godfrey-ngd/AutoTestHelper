@@ -7,7 +7,7 @@
 | **AutoTestDesign** (`autotestdesign/`) | AI-driven **test design** tool you build (FR 1.0–3.0, 6.0 + interactive review) |
 | **Target app** (`target-app/`) | **System under test** — simple login Web module |
 | **Target app tests** (`target-app-tests/`) | Playwright scripts that **execute** tests on the login module |
-| **docs/** | Report drafts (risk analysis, test plan, detailed design) for the **target app** |
+| **docs/** | Report drafts + **[用户使用手册](docs/用户使用手册.md)**（Import 填写说明与 Web 操作） |
 
 ## Quick start (Conda 推荐)
 
@@ -16,7 +16,6 @@
 ### 1. 创建并激活环境（只需一次）
 
 ```powershell
-cd C:\Users\86182\Desktop\Assignment2
 
 # 方式 A：用 environment.yml（推荐）
 conda env create -f environment.yml
@@ -40,7 +39,6 @@ copy .env.example .env
 
 ```powershell
 conda activate autotestdesign
-cd C:\Users\86182\Desktop\Assignment2
 streamlit run autotestdesign/ui/streamlit_app.py
 ```
 
@@ -50,7 +48,6 @@ streamlit run autotestdesign/ui/streamlit_app.py
 
 ```powershell
 conda activate autotestdesign
-cd C:\Users\86182\Desktop\Assignment2
 python target-app/app.py
 ```
 
@@ -60,7 +57,6 @@ python target-app/app.py
 
 ```powershell
 conda activate autotestdesign
-cd C:\Users\86182\Desktop\Assignment2
 pytest target-app-tests/test_login_client.py autotestdesign/tests -v
 ```
 
