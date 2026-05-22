@@ -4,8 +4,8 @@
 
 name: autotestdesign
 channels:
-  - conda-forge
-  - defaults
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
 dependencies:
   - python=3.11
   - pip

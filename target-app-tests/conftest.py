@@ -28,15 +28,11 @@ def flask_server():
     proc.wait(timeout=5)
 
 
-@pytest.fixture
-def base_url():
-    return os.getenv("TARGET_APP_URL", "http://127.0.0.1:5000")
-
-
 @pytest.fixture(autouse=True)
-def _playwright_reset(request, base_url):
-    """Reset lock state before each Playwright test."""
+def _playwright_reset(request):
+    """Reset lock state before each Playwright E2E test (test_login.py only)."""
     if "page" not in request.fixturenames:
         return
+    base = os.getenv("TARGET_APP_URL", "http://127.0.0.1:5000")
     page = request.getfixturevalue("page")
-    page.goto(f"{base_url}/reset")
+    page.goto(f"{base}/reset")
