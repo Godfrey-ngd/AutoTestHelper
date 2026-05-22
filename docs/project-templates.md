@@ -1,7 +1,10 @@
 # AutoTestDesign — Project Templates
 
-Ready-to-use **project name**, **target app description**, and **requirements** for the Streamlit **Import** tab.  
-Paste the CSV block into **Requirements (CSV id,text or one per line)** → **Format hint: auto** or **csv** → **Run full pipeline**.
+Ready-to-use **project name**, **target app description**, and **requirements** for the Streamlit **Import** tab.
+
+> UI steps: [用户使用手册.md](用户使用手册.md) · Install: [README.md](../README.md)
+
+Paste the CSV block into **Requirements** → **Format hint: auto** or **csv** → **Run full pipeline**.
 
 ---
 
@@ -15,7 +18,7 @@ Paste the CSV block into **Requirements (CSV id,text or one per line)** → **Fo
 
 ---
 
-## Template 1 — Login Module (English) ★ Recommended
+## Template 1 — Login Module (English) — Recommended
 
 **Matches bundled SUT:** `target-app/` (http://127.0.0.1:5000)  
 **Use for:** Assignment demo, pytest `target-app-tests/`, risk report & test plan.
@@ -40,7 +43,7 @@ REQ-007,After three failed login attempts the account shall be locked for 30 sec
 
 ---
 
-## Template 2 — Login Module (中文)
+## Template 2 — Login Module (Chinese)
 
 Same rules as Template 1; requirements in Chinese for LLM structuring demos.
 

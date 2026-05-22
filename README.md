@@ -1,176 +1,112 @@
 # Assignment 2 — AutoTestDesign
 
-## What is what?
-
-| Component | Role |
-|-----------|------|
-| **AutoTestDesign** (`autotestdesign/`) | AI-driven **test design** tool you build (FR 1.0–3.0, 6.0 + interactive review) |
-| **Target app** (`target-app/`) | **System under test** — simple login Web module |
-| **Target app tests** (`target-app-tests/`) | Playwright scripts that **execute** tests on the login module |
-| **docs/** | Report drafts + **[用户使用手册](docs/用户使用手册.md)** + **[项目模板](docs/project-templates.md)** |
-
-## Quick start (Conda 推荐)
-
-前置：已安装 [Anaconda](https://www.anaconda.com/) 或 Miniconda，并在终端能执行 `conda`。
-
-### 1. 创建并激活环境（只需一次）
-
-```powershell
-
-# 方式 A：用 environment.yml（推荐）
-conda env create -f environment.yml
-
-# 若环境已存在，改为更新：
-# conda env update -f environment.yml --prune
-
-conda activate autotestdesign
-```
-
-也可双击 `setup_conda.bat` 自动执行 `conda env create`。
-
-### 2. 配置 API（可选）
-
-```powershell
-copy .env.example .env
-# 编辑 .env，填入 OPENAI_API_KEY（不填则使用规则引擎 fallback）
-```
-
-### 3. 运行工具 UI（终端 1）
-
-```powershell
-conda activate autotestdesign
-streamlit run autotestdesign/ui/streamlit_app.py
-```
-
-浏览器打开提示的地址（通常 http://localhost:8501）。侧边栏 **Create project** → 选 **Sample login requirements** → **Run full pipeline**。
-
-### 4. 运行被测登录应用（终端 2）
-
-```powershell
-conda activate autotestdesign
-python target-app/app.py
-```
-
-浏览器访问 http://127.0.0.1:5000
-
-### 5. 运行自动化测试
-
-```powershell
-conda activate autotestdesign
-pytest target-app-tests/test_login_client.py autotestdesign/tests -v
-```
-
-### 6. 性能基准（NFR）
-
-```powershell
-python scripts/benchmark_pipeline.py
-```
-
-### 7. 可选：REST API
-
-```powershell
-uvicorn autotestdesign.app.main:app --reload --port 8000
-```
-
-### 8. 可选：Playwright 浏览器 E2E
-
-```powershell
-pip install playwright pytest-playwright
-playwright install chromium
-pytest target-app-tests/test_login.py -v
-```
-
-（需先在一个终端运行 `python target-app/app.py`。）
-
-### Conda 常用命令
-
-| 操作 | 命令 |
-|------|------|
-| 激活环境 | `conda activate autotestdesign` |
-| 退出环境 | `conda deactivate` |
-| 删除环境 | `conda env remove -n autotestdesign` |
-| 查看已装包 | `conda list` |
+AI-driven test **design** tool (requirements → risk → black-box cases → review → export) plus a **login module** as the system under test (SUT) for assignment reports and automated tests.
 
 ---
 
-## Quick start (venv / pip 备选)
+## Documentation
 
-```bash
-cd Assignment2
+| Document | Language | Contents |
+|----------|----------|----------|
+| **[docs/用户使用手册.md](docs/用户使用手册.md)** | 中文 | Streamlit UI, import formats, tabs, SUT, FAQ, demo flow |
+| **[docs/project-templates.md](docs/project-templates.md)** | EN | 7 ready-made projects (name + target app + CSV requirements) |
+| [docs/risk-analysis.md](docs/risk-analysis.md) | EN draft | Risk report (SUT) — fill team info, export PDF |
+| [docs/test-plan.md](docs/test-plan.md) | EN draft | Test plan (SUT) |
+| [docs/detailed-design-exec.md](docs/detailed-design-exec.md) | EN draft | Detailed design & execution (SUT) |
+| [docs/performance-nfr.md](docs/performance-nfr.md) | EN | Performance notes (NFR) |
+
+**New users:** install (below) → read **用户使用手册** §快速上手 → copy requirements from **project-templates** Template 1.
+
+---
+
+## Tool vs system under test
+
+```text
+┌─────────────────────────────┐     ┌──────────────────────────┐
+│  AutoTestDesign (you build) │     │  target-app (SUT)        │
+│  Streamlit :8501            │     │  Flask login :5000       │
+│  Design cases, export CSV   │────▶│  Run manual / pytest     │
+└─────────────────────────────┘     └──────────────────────────┘
+```
+
+| Path | Role |
+|------|------|
+| `autotestdesign/` | Tool source, `prompts/`, Streamlit UI |
+| `target-app/` | Login SUT (username/password, lockout) |
+| `target-app-tests/` | Automated tests against SUT |
+| `sample_data/` | Example requirement CSV files |
+| `data/projects/` | Saved projects (JSON, gitignored) |
+
+---
+
+## Install (Conda)
+
+Requires [Anaconda](https://www.anaconda.com/) or Miniconda.
+
+```powershell
+cd C:\Users\86182\Desktop\Assignment2
+conda env create -f environment.yml
+conda activate autotestdesign
+copy .env.example .env
+```
+
+Optional: set `OPENAI_API_KEY` in `.env` for LLM mode. If unset, the tool uses a **rule-based fallback** (offline, fast). See manual §LLM.
+
+Update existing env: `conda env update -f environment.yml --prune`  
+Windows shortcut: double-click `setup_conda.bat`.
+
+### pip / venv (alternative)
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate   # Windows
+.\.venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env     # optional: set OPENAI_API_KEY
+copy .env.example .env
 ```
 
-### Run AutoTestDesign UI
+---
 
-```bash
-streamlit run autotestdesign/ui/streamlit_app.py
-```
+## Command cheat sheet
 
-Without `OPENAI_API_KEY`, the tool uses **rule-based fallback** generators (sufficient for demo and offline use).
+All commands assume `conda activate autotestdesign` and project root.
 
-### Run target login app
+| Goal | Command |
+|------|---------|
+| **Test design UI** | `streamlit run autotestdesign/ui/streamlit_app.py` → http://localhost:8501 |
+| **Login SUT** | `python target-app/app.py` → http://127.0.0.1:5000 |
+| **Automated tests** | `pytest target-app-tests/test_login_client.py autotestdesign/tests -v` |
+| **Performance benchmark** | `python scripts/benchmark_pipeline.py` |
+| **REST API (optional)** | `uvicorn autotestdesign.app.main:app --reload --port 8000` |
+| **Playwright E2E (optional)** | Start SUT, then `pytest target-app-tests/test_login.py -v` |
 
-```bash
-python target-app/app.py
-```
+Batch shortcuts: `run_ui.bat`, `run_target_app.bat`.
 
-Open http://127.0.0.1:5000
+---
 
-### Run automated tests (target app)
+## Implemented requirements
 
-```bash
-pytest target-app-tests/test_login_client.py autotestdesign/tests -v
-```
+| FR | Feature | Location |
+|----|---------|----------|
+| 1.0 | Import CSV / text / paste | `core/importers/` |
+| 1.1 | Structure requirements | `core/parser/`, `prompts/structure_requirement.md` |
+| 2.0 | Risk & priority H/M/L | `core/risk/` |
+| 3.0 | EP, BVA, decision table | `core/techniques/` |
+| 4.0 | State model (optional) | `core/whitebox/` |
+| 5.0 | Test oracle (optional) | `core/oracle/` |
+| 6.0 | Export JSON / CSV | `core/exporters/` |
+| 7.0 | Suite optimization (optional) | `core/optimizer/` |
+| — | Interactive review | Streamlit tabs + `ReviewEvent` |
 
-Optional Playwright E2E (after `pip install playwright` and `playwright install chromium`):
+---
 
-```bash
-pytest target-app-tests/test_login.py -v
-```
+## Submission package (reminder)
 
-### Optional REST API
+- Zip: `autotestdesign/` (include `prompts/`), `target-app/`, `target-app-tests/`, `README.md`, `requirements.txt` or `environment.yml`, `.env.example` — **not** `.env`
+- PDFs: risk report, test plan, detailed design (from `docs/`, add team ID & names on cover)
+- Demo video: import → pipeline → edit case → export → run 2–3 tests
 
-```bash
-uvicorn autotestdesign.app.main:app --reload --port 8000
-```
+---
 
-## Functional requirements implemented
+## License / team
 
-| FR | Module |
-|----|--------|
-| 1.0 | `core/importers/` |
-| 1.1 | `core/parser/` + `prompts/structure_requirement.md` |
-| 2.0 | `core/risk/` + `prompts/risk_assessment.md` |
-| 3.0 | `core/techniques/` (EP, BVA, Decision Table) |
-| 4.0 | `core/whitebox/` (optional) |
-| 5.0 | `core/oracle/` (optional) |
-| 6.0 | `core/exporters/` |
-| 7.0 | `core/optimizer/` (optional) |
-
-## Interactive review
-
-Streamlit tabs: Coverage, Strategy, Test Cases, Traceability, Improvement — all support **edit + save** with `ReviewEvent` audit log.
-
-## Performance (NFR)
-
-Run benchmark:
-
-```bash
-python scripts/benchmark_pipeline.py
-```
-
-Target: case generation &lt; 2s with cached/rule-based path. Document results in README if using LLM (typically slower).
-
-## Submission zip contents
-
-- `autotestdesign/` (source + `prompts/`)
-- `target-app/`, `target-app-tests/`
-- `README.md`, `requirements.txt`, `.env.example`
-- Demo video (record Streamlit + 2–3 Playwright tests)
-
-## Team
-
-Edit cover pages in `docs/` with Team ID, names, and student IDs before PDF export.
+Edit `docs/*.md` covers with **Team ID**, full names, and student IDs before PDF export.
