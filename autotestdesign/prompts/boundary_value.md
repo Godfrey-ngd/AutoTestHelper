@@ -13,7 +13,7 @@ Return JSON:
       "priority": "H",
       "preconditions": "...",
       "steps": ["..."],
-      "test_data": {"username": "abc"},
+      "test_data": {"username": "abc", "login_attempts": "3"},
       "expected": "...",
       "coverage_description": "min length boundary"
     }
@@ -29,3 +29,5 @@ Return JSON:
 ```
 
 Apply two-value and three-value BVA where applicable.
+
+Important: All `test_data` values must be JSON strings (e.g. `"3"` not `3`).

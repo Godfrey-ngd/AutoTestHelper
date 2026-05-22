@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, TypeVar
 
 import pandas as pd
 import streamlit as st
+
+T = TypeVar("T")
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -67,6 +72,68 @@ def _init_state() -> None:
         st.session_state["project_id"] = None
     if "metrics" not in st.session_state:
         st.session_state["metrics"] = {}
+    if "last_job_message" not in st.session_state:
+        st.session_state["last_job_message"] = None
+
+
+def _wait_hint() -> str:
+    if has_llm():
+        return "Calling LLM API — this may take 10–60 seconds. Please wait…"
+    return "Using rule engine — usually completes within a few seconds…"
+
+
+def _run_with_feedback(
+    title: str,
+    fn: Callable[[], T] | None = None,
+    *,
+    success: str | None = None,
+    steps: list[tuple[str, Callable[[], Any]]] | None = None,
+) -> Any:
+    """Run a long job with st.status progress and toast on completion."""
+    if not fn and not steps:
+        return None
+    with st.status(title, expanded=True) as status:
+        st.caption(_wait_hint())
+        progress = st.progress(0, text="Starting…")
+        t0 = time.perf_counter()
+        try:
+            result: Any = None
+            if steps:
+                total = len(steps)
+                for i, (label, step_fn) in enumerate(steps, start=1):
+                    st.write(f"**{i}/{total}** {label}")
+                    progress.progress((i - 1) / total, text=label)
+                    result = step_fn()
+                progress.progress(1.0, text="Done" if not fn else "Finalizing…")
+            if fn:
+                if not steps:
+                    progress.progress(0.15, text="Processing…")
+                result = fn()
+            elapsed = (time.perf_counter() - t0) * 1000
+            progress.progress(1.0, text="Complete")
+            msg = success or f"{title} complete ({elapsed:.0f} ms)"
+            status.update(label=msg, state="complete")
+            st.session_state["last_job_message"] = msg
+            st.toast(msg, icon="✅")
+            return result
+        except Exception as exc:
+            status.update(label=f"{title} failed", state="error")
+            st.error(str(exc))
+            st.exception(exc)
+            return None
+
+
+def _show_last_job_banner() -> None:
+    msg = st.session_state.get("last_job_message")
+    if msg:
+        st.success(f"Last operation: {msg}")
+
+
+def _require_content(content: str) -> bool:
+    if content and content.strip():
+        return True
+    st.warning("Paste requirements in the text box, or select **Sample login requirements**.")
+    return False
 
 
 def page_sidebar() -> None:
@@ -104,30 +171,96 @@ def tab_import(project: Project) -> Project:
     else:
         content = st.text_area("Requirements (CSV id,text or one per line)", height=200)
     fmt = st.selectbox("Format hint", ["auto", "csv", "text"])
+    st.caption(_wait_hint())
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("Import only"):
-            project = import_requirements(project, content, fmt)
-            _save_project(project)
-            st.success(f"Imported {len(project.requirements)} requirements")
+        if st.button("Import only", type="secondary"):
+            if not _require_content(content):
+                return project
+
+            def _do():
+                p = import_requirements(project, content, fmt)
+                _save_project(p)
+                return p
+
+            out = _run_with_feedback("Import requirements", _do)
+            if out is not None:
+                project = out
+                st.success(f"Imported {len(project.requirements)} requirement(s)")
     with c2:
-        if st.button("Import + Structure"):
-            project = import_requirements(project, content, fmt)
-            project, ms = run_structure(project)
-            st.session_state["metrics"]["structure_ms"] = ms
-            _save_project(project)
-            st.success(f"Structured in {ms:.0f} ms")
+        if st.button("Import + Structure", type="secondary"):
+            if not _require_content(content):
+                return project
+
+            def _do():
+                p = import_requirements(project, content, fmt)
+                p, ms = run_structure(p)
+                st.session_state["metrics"]["structure_ms"] = ms
+                _save_project(p)
+                return p, ms
+
+            out = _run_with_feedback(
+                "Import and structure",
+                lambda: _do()[0],
+                success="Structuring complete",
+                steps=[("Parse requirement text", lambda: None)],
+            )
+            if out is not None:
+                project = out
+                ms = st.session_state["metrics"].get("structure_ms", 0)
+                st.success(f"Structuring complete ({ms:.0f} ms)")
     with c3:
-        if st.button("Run full pipeline"):
-            project = import_requirements(project, content, fmt)
-            project, metrics = run_full_pipeline(project)
-            st.session_state["metrics"] = {
-                "structure_ms": metrics.structure_ms,
-                "risk_ms": metrics.risk_ms,
-                "techniques_ms": metrics.techniques_ms,
-            }
-            _save_project(project)
-            st.success("Pipeline complete")
+        if st.button("Run full pipeline", type="primary"):
+            if not _require_content(content):
+                return project
+
+            holder: dict[str, Any] = {"project": project, "metrics": None}
+
+            def _step_import() -> None:
+                holder["project"] = import_requirements(holder["project"], content, fmt)
+
+            def _step_structure() -> None:
+                p, ms = run_structure(holder["project"])
+                holder["project"] = p
+                st.session_state["metrics"]["structure_ms"] = ms
+
+            def _step_risk() -> None:
+                p, ms = run_risk(holder["project"])
+                holder["project"] = p
+                st.session_state["metrics"]["risk_ms"] = ms
+
+            def _step_techniques() -> None:
+                p, ms = run_techniques(holder["project"])
+                holder["project"] = p
+                st.session_state["metrics"]["techniques_ms"] = ms
+
+            def _finalize() -> Project:
+                _save_project(holder["project"])
+                return holder["project"]
+
+            if "structure_ms" not in st.session_state.get("metrics", {}):
+                st.session_state["metrics"] = {}
+
+            out = _run_with_feedback(
+                "Run full pipeline",
+                _finalize,
+                steps=[
+                    ("FR 1.0 Import requirements", _step_import),
+                    ("FR 1.1 Structure", _step_structure),
+                    ("FR 2.0 Risk assessment", _step_risk),
+                    ("FR 3.0 Black-box cases (EP / BVA / Decision Table)", _step_techniques),
+                ],
+            )
+            if out is not None:
+                project = out
+                m = st.session_state.get("metrics", {})
+                st.success(
+                    f"Pipeline complete: {len(project.requirements)} requirement(s), "
+                    f"{len(project.test_cases)} test case(s) "
+                    f"(structure {m.get('structure_ms', 0):.0f} ms / "
+                    f"risk {m.get('risk_ms', 0):.0f} ms / "
+                    f"cases {m.get('techniques_ms', 0):.0f} ms)"
+                )
     if project.requirements:
         rows = [
             {
@@ -145,10 +278,18 @@ def tab_import(project: Project) -> Project:
 
 def tab_risk(project: Project) -> Project:
     st.subheader("2. Risk & Priority (FR 2.0)")
-    if st.button("Assess risks"):
-        project, ms = run_risk(project)
-        st.session_state["metrics"]["risk_ms"] = ms
-        _save_project(project)
+    if not project.requirements:
+        st.info("Import requirements on the Import tab first.")
+    elif st.button("Assess risks", type="primary"):
+        def _do():
+            p, ms = run_risk(project)
+            st.session_state["metrics"]["risk_ms"] = ms
+            _save_project(p)
+            return p
+
+        out = _run_with_feedback("Risk assessment", _do, success="Risk analysis complete")
+        if out is not None:
+            project = out
     if project.risks:
         st.dataframe(
             pd.DataFrame(
@@ -169,40 +310,64 @@ def tab_risk(project: Project) -> Project:
 
 def tab_coverage(project: Project) -> Project:
     st.subheader("3. Coverage Items (Interactive)")
-    if st.button("Generate test cases (FR 3.0)"):
-        if not project.risks:
-            project, _ = run_risk(project)
-        project, ms = run_techniques(project)
-        st.session_state["metrics"]["techniques_ms"] = ms
-        _save_project(project)
-        st.success(f"Generated {len(project.test_cases)} cases in {ms:.0f} ms")
+    if not project.requirements:
+        st.info("Import requirements on the Import tab first.")
+    elif st.button("Generate test cases (FR 3.0)", type="primary"):
+        holder = {"p": project}
+
+        def _risk_if_needed() -> None:
+            if not holder["p"].risks:
+                holder["p"], _ = run_risk(holder["p"])
+
+        def _gen_cases() -> None:
+            holder["p"], ms = run_techniques(holder["p"])
+            st.session_state["metrics"]["techniques_ms"] = ms
+
+        def _save() -> Project:
+            _save_project(holder["p"])
+            return holder["p"]
+
+        out = _run_with_feedback(
+            "Generate test cases",
+            _save,
+            steps=[
+                ("Risk analysis (if not done yet)", _risk_if_needed),
+                ("EP / BVA / Decision Table", _gen_cases),
+            ],
+        )
+        if out is not None:
+            project = out
+            ms = st.session_state["metrics"].get("techniques_ms", 0)
+            st.success(f"Generated {len(project.test_cases)} test case(s) ({ms:.0f} ms)")
 
     if project.coverage_items:
         df = pd.DataFrame([c.model_dump() for c in project.coverage_items])
         edited = st.data_editor(df, num_rows="dynamic", key="cov_editor")
-        if st.button("Save coverage edits"):
-            old = {c.id: c for c in project.coverage_items}
-            new_items = []
-            for _, row in edited.iterrows():
-                cid = str(row.get("id", ""))
-                item = CoverageItem(
-                    id=cid or CoverageItem().id,
-                    requirement_id=str(row.get("requirement_id", "")),
-                    item_type=str(row.get("item_type", "")),
-                    description=str(row.get("description", "")),
-                )
-                if cid in old and old[cid].description != item.description:
-                    log_review(
-                        project,
-                        "CoverageItem",
-                        cid,
-                        "description",
-                        old[cid].description,
-                        item.description,
+        if st.button("Save coverage edits", type="secondary"):
+            with st.spinner("Saving coverage items…"):
+                old = {c.id: c for c in project.coverage_items}
+                new_items = []
+                for _, row in edited.iterrows():
+                    cid = str(row.get("id", ""))
+                    item = CoverageItem(
+                        id=cid or CoverageItem().id,
+                        requirement_id=str(row.get("requirement_id", "")),
+                        item_type=str(row.get("item_type", "")),
+                        description=str(row.get("description", "")),
                     )
-                new_items.append(item)
-            project.coverage_items = new_items
-            _save_project(project)
+                    if cid in old and old[cid].description != item.description:
+                        log_review(
+                            project,
+                            "CoverageItem",
+                            cid,
+                            "description",
+                            old[cid].description,
+                            item.description,
+                        )
+                    new_items.append(item)
+                project.coverage_items = new_items
+                _save_project(project)
+            st.toast("Coverage items saved", icon="✅")
             st.success("Coverage items saved")
     return project
 
@@ -241,21 +406,23 @@ def tab_strategy(project: Project) -> Project:
             ]
         )
         edited = st.data_editor(df, num_rows="dynamic", key="str_editor")
-        if st.button("Save strategy edits"):
-            new_s = []
-            for _, row in edited.iterrows():
-                new_s.append(
-                    TestStrategy(
-                        id=str(row.get("id", TestStrategy().id)),
-                        technique=str(row.get("technique", "")),
-                        rationale=str(row.get("rationale", "")),
-                        requirement_ids=str(row.get("requirements", "")).split(",")
-                        if row.get("requirements")
-                        else [],
+        if st.button("Save strategy edits", type="secondary"):
+            with st.spinner("Saving strategies…"):
+                new_s = []
+                for _, row in edited.iterrows():
+                    new_s.append(
+                        TestStrategy(
+                            id=str(row.get("id", TestStrategy().id)),
+                            technique=str(row.get("technique", "")),
+                            rationale=str(row.get("rationale", "")),
+                            requirement_ids=str(row.get("requirements", "")).split(",")
+                            if row.get("requirements")
+                            else [],
+                        )
                     )
-                )
-            project.strategies = new_s
-            _save_project(project)
+                project.strategies = new_s
+                _save_project(project)
+            st.toast("Strategies saved", icon="✅")
     return project
 
 
@@ -263,10 +430,21 @@ def tab_cases(project: Project) -> Project:
     st.subheader("5. Test Cases (Interactive)")
     req_ids = [r.id for r in project.requirements]
     sel_req = st.selectbox("Regenerate for requirement", req_ids or ["—"])
-    if st.button("Regenerate cases for selected requirement") and req_ids:
-        project = regenerate_for_requirement(project, sel_req)
-        _save_project(project)
-        st.success("Regenerated")
+    if st.button("Regenerate cases for selected requirement", type="primary") and req_ids:
+        def _do():
+            p = regenerate_for_requirement(project, sel_req)
+            _save_project(p)
+            return p
+
+        out = _run_with_feedback(
+            f"Regenerate cases ({sel_req})",
+            _do,
+            success=f"{sel_req} test cases updated",
+        )
+        if out is not None:
+            project = out
+            n = len([t for t in project.test_cases if t.requirement_id == sel_req])
+            st.success(f"Regenerated cases for {sel_req} ({n} case(s) for this requirement)")
 
     if project.test_cases:
         rows = []
@@ -286,29 +464,31 @@ def tab_cases(project: Project) -> Project:
         edited = st.data_editor(
             pd.DataFrame(rows), num_rows="dynamic", use_container_width=True, key="tc_editor"
         )
-        if st.button("Save test case edits"):
-            new_cases = []
-            old = {t.id: t for t in project.test_cases}
-            for _, row in edited.iterrows():
-                tid = str(row.get("id", ""))
-                pr = Priority(str(row.get("priority", "M")))
-                tc = TestCase(
-                    id=tid or TestCase().id,
-                    requirement_id=str(row.get("requirement_id", "")),
-                    title=str(row.get("title", "")),
-                    technique=str(row.get("technique", "")),
-                    priority=pr,
-                    steps=str(row.get("steps", "")).split(" | "),
-                    test_data=old[tid].test_data if tid in old else {},
-                    expected=str(row.get("expected", "")),
-                )
-                if tid in old and old[tid].expected != tc.expected:
-                    log_review(
-                        project, "TestCase", tid, "expected", old[tid].expected, tc.expected
+        if st.button("Save test case edits", type="secondary"):
+            with st.spinner("Saving test cases…"):
+                new_cases = []
+                old = {t.id: t for t in project.test_cases}
+                for _, row in edited.iterrows():
+                    tid = str(row.get("id", ""))
+                    pr = Priority(str(row.get("priority", "M")))
+                    tc = TestCase(
+                        id=tid or TestCase().id,
+                        requirement_id=str(row.get("requirement_id", "")),
+                        title=str(row.get("title", "")),
+                        technique=str(row.get("technique", "")),
+                        priority=pr,
+                        steps=str(row.get("steps", "")).split(" | "),
+                        test_data=old[tid].test_data if tid in old else {},
+                        expected=str(row.get("expected", "")),
                     )
-                new_cases.append(tc)
-            project.test_cases = new_cases
-            _save_project(project)
+                    if tid in old and old[tid].expected != tc.expected:
+                        log_review(
+                            project, "TestCase", tid, "expected", old[tid].expected, tc.expected
+                        )
+                    new_cases.append(tc)
+                project.test_cases = new_cases
+                _save_project(project)
+            st.toast("Test cases saved", icon="✅")
 
     with st.expander("FR 5.0 Test Oracle"):
         if project.requirements:
@@ -316,7 +496,8 @@ def tab_cases(project: Project) -> Project:
             td = st.text_input("username", "user01")
             pd_in = st.text_input("password", "Pass1234")
             if st.button("Generate expected result"):
-                exp = generate_oracle(r0, {"username": td, "password": pd_in})
+                with st.spinner("Generating expected result…"):
+                    exp = generate_oracle(r0, {"username": td, "password": pd_in})
                 st.info(exp)
     return project
 
@@ -399,15 +580,23 @@ def tab_export(project: Project) -> None:
 
     st.subheader("Optional: FR 4.0 / FR 7.0")
     if st.button("Add white-box state model (FR 4.0)"):
-        project = add_whitebox(project)
-        _save_project(project)
-        st.success("State model added")
+        out = _run_with_feedback(
+            "Add white-box state model",
+            lambda: add_whitebox(project),
+            success="State model added",
+        )
+        if out is not None:
+            project = out
+            _save_project(project)
+            st.success("State model added")
     if project.state_diagram:
         st.markdown(project.state_diagram)
 
     if st.button("Optimize suite by risk (FR 7.0)"):
-        project.optimized_case_ids = optimize_suite(project)
-        _save_project(project)
+        with st.spinner("Optimizing test suite…"):
+            project.optimized_case_ids = optimize_suite(project)
+            _save_project(project)
+        st.toast("Suite optimization complete", icon="✅")
         st.write(f"Optimized order: {len(project.optimized_case_ids)} unique cases")
 
     m = st.session_state.get("metrics", {})
@@ -436,6 +625,7 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
 
     st.title(project.name)
     st.caption(project.target_app_description)
+    _show_last_job_banner()
 
     tabs = st.tabs(
         [

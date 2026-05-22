@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+import json
+from typing import Any, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Priority(str, Enum):
@@ -63,6 +64,34 @@ class TraceLink(BaseModel):
     test_case_id: str = ""
 
 
+def _coerce_test_data(value: Any) -> dict[str, str]:
+    """LLM JSON often uses numbers/bools; schema requires dict[str, str]."""
+    if not value:
+        return {}
+    if not isinstance(value, dict):
+        return {"value": str(value)}
+    out: dict[str, str] = {}
+    for key, val in value.items():
+        k = str(key)
+        if val is None:
+            out[k] = ""
+        elif isinstance(val, bool):
+            out[k] = "true" if val else "false"
+        elif isinstance(val, (list, dict)):
+            out[k] = json.dumps(val, ensure_ascii=False)
+        else:
+            out[k] = str(val)
+    return out
+
+
+def _coerce_steps(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(s) for s in value]
+    if isinstance(value, str) and value.strip():
+        return [value]
+    return []
+
+
 class TestCase(BaseModel):
     id: str = Field(default_factory=lambda: _id("TC"))
     requirement_id: str = ""
@@ -76,6 +105,24 @@ class TestCase(BaseModel):
     risk_score: int = 50
     coverage_ids: list[str] = Field(default_factory=list)
     strategy_id: str = ""
+
+    @field_validator("test_data", mode="before")
+    @classmethod
+    def validate_test_data(cls, value: Any) -> dict[str, str]:
+        return _coerce_test_data(value)
+
+    @field_validator("steps", mode="before")
+    @classmethod
+    def validate_steps(cls, value: Any) -> list[str]:
+        return _coerce_steps(value)
+
+    @field_validator("risk_score", mode="before")
+    @classmethod
+    def validate_risk_score(cls, value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 50
 
 
 class ReviewEvent(BaseModel):

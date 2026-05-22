@@ -14,6 +14,8 @@ from autotestdesign.models.schemas import (
     RiskAssessment,
     TestCase,
     TestStrategy,
+    _coerce_steps,
+    _coerce_test_data,
 )
 
 
@@ -61,13 +63,13 @@ def merge_llm_result(
             cov_ids.append(result.coverage_items[-1].id)
         case = TestCase(
             requirement_id=rid,
-            title=tc.get("title", ""),
-            technique=tc.get("technique", technique),
+            title=str(tc.get("title", "")),
+            technique=str(tc.get("technique", technique)),
             priority=_priority(risk_map, rid),
-            preconditions=tc.get("preconditions", ""),
-            steps=tc.get("steps", []),
-            test_data=tc.get("test_data", {}),
-            expected=tc.get("expected", ""),
+            preconditions=str(tc.get("preconditions", "")),
+            steps=_coerce_steps(tc.get("steps", [])),
+            test_data=_coerce_test_data(tc.get("test_data", {})),
+            expected=str(tc.get("expected", "")),
             risk_score=_risk_score(risk_map, rid),
             coverage_ids=cov_ids,
             strategy_id=strategy.id,
