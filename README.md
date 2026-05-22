@@ -99,14 +99,3 @@ Batch shortcuts: `run_ui.bat`, `run_target_app.bat`.
 
 ---
 
-## Submission package (reminder)
-
-- Zip: `autotestdesign/` (include `prompts/`), `target-app/`, `target-app-tests/`, `README.md`, `requirements.txt` or `environment.yml`, `.env.example` — **not** `.env`
-- PDFs: risk report, test plan, detailed design (from `docs/`, add team ID & names on cover)
-- Demo video: import → pipeline → edit case → export → run 2–3 tests
-
----
-
-## License / team
-
-Edit `docs/*.md` covers with **Team ID**, full names, and student IDs before PDF export.
