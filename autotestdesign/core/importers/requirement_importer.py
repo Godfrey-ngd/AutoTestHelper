@@ -46,11 +46,10 @@ def import_from_text(content: str) -> list[Requirement]:
         line = line.strip()
         if not line:
             continue
-        m = re.match(r"^(?:REQ[-_]?\d+|R\d+|\d+)[.:)\s]+(.+)$", line, re.I)
+        m = re.match(r"^(?:REQ[-_]?\d+|R\d+|\d+)[.:),\s]+(.+)$", line, re.I)
         if m:
             text = m.group(1).strip()
-            rid = re.match(r"^(\S+)", line)
-            req_id = rid.group(1) if rid else Requirement().id
+            req_id = m.group(0).removesuffix(m.group(1)).rstrip(".:), ") or Requirement().id
         else:
             text = line
             req_id = Requirement().id
