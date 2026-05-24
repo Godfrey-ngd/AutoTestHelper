@@ -33,7 +33,7 @@ def run_structure(project: Project) -> tuple[Project, float]:
 
 def run_risk(project: Project) -> tuple[Project, float]:
     t0 = time.perf_counter()
-    project.risks = assess_risks(project.requirements)
+    project.risks = assess_risks(project.requirements, project.risk_weights)
     for tc in project.test_cases:
         for r in project.risks:
             if tc.requirement_id == r.requirement_id:

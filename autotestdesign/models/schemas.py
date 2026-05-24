@@ -21,6 +21,14 @@ def _id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:8]}"
 
 
+class RiskWeights(BaseModel):
+    """Configurable risk scoring weights for FR 2.0."""
+
+    business_impact: float = Field(default=0.40, ge=0.0, le=1.0)
+    failure_probability: float = Field(default=0.35, ge=0.0, le=1.0)
+    detectability: float = Field(default=0.25, ge=0.0, le=1.0)
+
+
 class StructuredFields(BaseModel):
     inputs: list[str] = Field(default_factory=list)
     data_ranges: list[str] = Field(default_factory=list)
@@ -140,6 +148,7 @@ class Project(BaseModel):
     id: str = Field(default_factory=lambda: _id("PRJ"))
     name: str = "Untitled Project"
     target_app_description: str = ""
+    risk_weights: RiskWeights = Field(default_factory=RiskWeights)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     requirements: list[Requirement] = Field(default_factory=list)
     risks: list[RiskAssessment] = Field(default_factory=list)

@@ -6,7 +6,7 @@ import json
 import re
 
 from autotestdesign.core.llm_client import chat_json, has_llm, load_prompt
-from autotestdesign.models.schemas import Priority, Requirement, RiskAssessment
+from autotestdesign.models.schemas import Priority, Requirement, RiskAssessment, RiskWeights
 
 HIGH_KEYWORDS = re.compile(
     r"security|auth|login|password|encrypt|payment|privilege|lock|session|安全|登录|密码",
@@ -18,19 +18,32 @@ MED_KEYWORDS = re.compile(
 )
 
 
-def _rule_score(req: Requirement) -> tuple[int, Priority, str]:
+def _rule_score(req: Requirement, weights: RiskWeights) -> tuple[int, Priority, str]:
     text = req.raw_text + " " + req.title
-    score = 40
+    # Compute per-dimension sub-scores (0-100)
+    impact = 40
+    failure = 20
+    detectability = 30
     reasons: list[str] = []
     if HIGH_KEYWORDS.search(text):
-        score += 35
+        impact += 40
+        failure += 30
         reasons.append("Security/authentication related")
     if MED_KEYWORDS.search(text):
-        score += 20
+        failure += 30
+        detectability += 20
         reasons.append("Input validation / error handling")
     if req.structured.data_ranges:
-        score += 10
-        reasons.append("Defined data ranges increase failure impact")
+        failure += 20
+        reasons.append("Defined data ranges increase failure probability")
+    if req.structured.conditions:
+        failure += 15
+    # Apply configurable weights
+    score = int(
+        min(100, impact) * weights.business_impact
+        + min(100, failure) * weights.failure_probability
+        + min(100, detectability) * weights.detectability
+    )
     score = min(100, score)
     if score >= 80:
         return score, Priority.HIGH, "; ".join(reasons) or "High impact requirement"
@@ -39,12 +52,16 @@ def _rule_score(req: Requirement) -> tuple[int, Priority, str]:
     return score, Priority.LOW, "; ".join(reasons) or "Low impact requirement"
 
 
-def assess_risks(requirements: list[Requirement]) -> list[RiskAssessment]:
+def assess_risks(
+    requirements: list[Requirement], weights: RiskWeights | None = None
+) -> list[RiskAssessment]:
+    if weights is None:
+        weights = RiskWeights()
     if not requirements:
         return []
 
     if has_llm():
-        system = load_prompt("risk_assessment.md")
+        system = _build_llm_prompt(weights)
         payload = {
             "requirements": [
                 {
@@ -77,9 +94,35 @@ def assess_risks(requirements: list[Requirement]) -> list[RiskAssessment]:
     return [
         RiskAssessment(
             requirement_id=r.id,
-            score=_rule_score(r)[0],
-            priority=_rule_score(r)[1],
-            reason=_rule_score(r)[2],
+            score=_rule_score(r, weights)[0],
+            priority=_rule_score(r, weights)[1],
+            reason=_rule_score(r, weights)[2],
         )
         for r in requirements
     ]
+
+
+def _build_llm_prompt(weights: RiskWeights) -> str:
+    """Load the risk assessment prompt and inject the configured weights."""
+    template = load_prompt("risk_assessment.md")
+    bi = int(weights.business_impact * 100)
+    fp = int(weights.failure_probability * 100)
+    de = int(weights.detectability * 100)
+    # Replace the weight table
+    new_table = (
+        f"| **Business Impact** | {bi}% | What is the consequence of failure? Does it affect security, data integrity, revenue, user trust, or legal compliance? |\n"
+        f"| **Failure Probability** | {fp}% | How likely is this requirement to fail? Consider complexity (many conditions, complex ranges), dependency on external systems, historical defect patterns. |\n"
+        f"| **Detectability** | {de}% | If this requirement fails, how hard is it to detect? Is the failure obvious to users, or could it silently corrupt data? |"
+    )
+    template = re.sub(
+        r"\| \*\*Business Impact\*\* \| \d+% \|.*\n\| \*\*Failure Probability\*\* \| \d+% \|.*\n\| \*\*Detectability\*\* \| \d+% \|.*",
+        new_table,
+        template,
+    )
+    # Replace the scoring formula
+    template = re.sub(
+        r"score = \(impact × 0\.\d+\) \+ \(probability × 0\.\d+\) \+ \(detectability × 0\.\d+\)",
+        f"score = (impact x {weights.business_impact:.2f}) + (probability x {weights.failure_probability:.2f}) + (detectability x {weights.detectability:.2f})",
+        template,
+    )
+    return template

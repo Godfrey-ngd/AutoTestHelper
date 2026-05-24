@@ -36,6 +36,8 @@ from autotestdesign.models.schemas import (
     Priority,
     Project,
     Requirement,
+    RiskWeights,
+    StructuredFields,
     TestCase,
     TestStrategy,
 )
@@ -164,103 +166,100 @@ def page_sidebar() -> None:
 
 def tab_import(project: Project) -> Project:
     st.subheader("1. Import & Parse (FR 1.0 / 1.1)")
-    source = st.radio("Source", ["Paste", "Sample login requirements"], horizontal=True)
+    source = st.radio(
+        "Source",
+        ["Paste", "Structured Form", "Sample login requirements"],
+        horizontal=True,
+    )
+
     if source == "Sample login requirements":
         content = SAMPLE_REQ
         st.code(content)
-    else:
-        content = st.text_area("Requirements (CSV id,text or one per line)", height=200)
-    fmt = st.selectbox("Format hint", ["auto", "csv", "text"])
-    st.caption(_wait_hint())
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("Import only", type="secondary"):
-            if not _require_content(content):
-                return project
-
-            def _do():
-                p = import_requirements(project, content, fmt)
-                _save_project(p)
-                return p
-
-            out = _run_with_feedback("Import requirements", _do)
-            if out is not None:
-                project = out
-                st.success(f"Imported {len(project.requirements)} requirement(s)")
-    with c2:
-        if st.button("Import + Structure", type="secondary"):
-            if not _require_content(content):
-                return project
-
-            def _do():
-                p = import_requirements(project, content, fmt)
-                p, ms = run_structure(p)
-                st.session_state["metrics"]["structure_ms"] = ms
-                _save_project(p)
-                return p, ms
-
-            out = _run_with_feedback(
-                "Import and structure",
-                lambda: _do()[0],
-                success="Structuring complete",
-                steps=[("Parse requirement text", lambda: None)],
-            )
-            if out is not None:
-                project = out
-                ms = st.session_state["metrics"].get("structure_ms", 0)
-                st.success(f"Structuring complete ({ms:.0f} ms)")
-    with c3:
-        if st.button("Run full pipeline", type="primary"):
-            if not _require_content(content):
-                return project
-
-            holder: dict[str, Any] = {"project": project, "metrics": None}
-
-            def _step_import() -> None:
-                holder["project"] = import_requirements(holder["project"], content, fmt)
-
-            def _step_structure() -> None:
-                p, ms = run_structure(holder["project"])
-                holder["project"] = p
-                st.session_state["metrics"]["structure_ms"] = ms
-
-            def _step_risk() -> None:
-                p, ms = run_risk(holder["project"])
-                holder["project"] = p
-                st.session_state["metrics"]["risk_ms"] = ms
-
-            def _step_techniques() -> None:
-                p, ms = run_techniques(holder["project"])
-                holder["project"] = p
-                st.session_state["metrics"]["techniques_ms"] = ms
-
-            def _finalize() -> Project:
-                _save_project(holder["project"])
-                return holder["project"]
-
-            if "structure_ms" not in st.session_state.get("metrics", {}):
-                st.session_state["metrics"] = {}
-
-            out = _run_with_feedback(
-                "Run full pipeline",
-                _finalize,
-                steps=[
-                    ("FR 1.0 Import requirements", _step_import),
-                    ("FR 1.1 Structure", _step_structure),
-                    ("FR 2.0 Risk assessment", _step_risk),
-                    ("FR 3.0 Black-box cases (EP / BVA / Decision Table)", _step_techniques),
-                ],
-            )
-            if out is not None:
-                project = out
-                m = st.session_state.get("metrics", {})
-                st.success(
-                    f"Pipeline complete: {len(project.requirements)} requirement(s), "
-                    f"{len(project.test_cases)} test case(s) "
-                    f"(structure {m.get('structure_ms', 0):.0f} ms / "
-                    f"risk {m.get('risk_ms', 0):.0f} ms / "
-                    f"cases {m.get('techniques_ms', 0):.0f} ms)"
+        fmt = st.selectbox("Format hint", ["auto", "csv", "text"])
+        st.caption(_wait_hint())
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("Import only", type="secondary", key="import_only_sample"):
+                if not _require_content(content):
+                    return project
+                def _do():
+                    p = import_requirements(project, content, fmt)
+                    _save_project(p)
+                    return p
+                out = _run_with_feedback("Import requirements", _do)
+                if out is not None:
+                    project = out
+                    st.success(f"Imported {len(project.requirements)} requirement(s)")
+        with c2:
+            if st.button("Import + Structure", type="secondary", key="import_struct_sample"):
+                if not _require_content(content):
+                    return project
+                def _do():
+                    p = import_requirements(project, content, fmt)
+                    p, ms = run_structure(p)
+                    st.session_state["metrics"]["structure_ms"] = ms
+                    _save_project(p)
+                    return p, ms
+                out = _run_with_feedback(
+                    "Import and structure",
+                    lambda: _do()[0],
+                    success="Structuring complete",
+                    steps=[("Parse requirement text", lambda: None)],
                 )
+                if out is not None:
+                    project = out
+                    ms = st.session_state["metrics"].get("structure_ms", 0)
+                    st.success(f"Structuring complete ({ms:.0f} ms)")
+        with c3:
+            if st.button("Run full pipeline", type="primary", key="full_pipeline_sample"):
+                if not _require_content(content):
+                    return project
+                project = _run_full_pipeline_content(project, content, fmt)
+    elif source == "Paste":
+        content = st.text_area("Requirements (CSV id,text or one per line)", height=200)
+        fmt = st.selectbox("Format hint", ["auto", "csv", "text"])
+        st.caption(_wait_hint())
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("Import only", type="secondary", key="import_only_paste"):
+                if not _require_content(content):
+                    return project
+                def _do():
+                    p = import_requirements(project, content, fmt)
+                    _save_project(p)
+                    return p
+                out = _run_with_feedback("Import requirements", _do)
+                if out is not None:
+                    project = out
+                    st.success(f"Imported {len(project.requirements)} requirement(s)")
+        with c2:
+            if st.button("Import + Structure", type="secondary", key="import_struct_paste"):
+                if not _require_content(content):
+                    return project
+                def _do():
+                    p = import_requirements(project, content, fmt)
+                    p, ms = run_structure(p)
+                    st.session_state["metrics"]["structure_ms"] = ms
+                    _save_project(p)
+                    return p, ms
+                out = _run_with_feedback(
+                    "Import and structure",
+                    lambda: _do()[0],
+                    success="Structuring complete",
+                    steps=[("Parse requirement text", lambda: None)],
+                )
+                if out is not None:
+                    project = out
+                    ms = st.session_state["metrics"].get("structure_ms", 0)
+                    st.success(f"Structuring complete ({ms:.0f} ms)")
+        with c3:
+            if st.button("Run full pipeline", type="primary", key="full_pipeline_paste"):
+                if not _require_content(content):
+                    return project
+                project = _run_full_pipeline_content(project, content, fmt)
+    elif source == "Structured Form":
+        project = _tab_import_form(project)
+
     if project.requirements:
         rows = [
             {
@@ -276,12 +275,248 @@ def tab_import(project: Project) -> Project:
     return project
 
 
+def _run_full_pipeline_content(project: Project, content: str, fmt: str) -> Project:
+    """Extracted helper: run full pipeline on text content."""
+    holder: dict[str, Any] = {"project": project}
+
+    def _step_import() -> None:
+        holder["project"] = import_requirements(holder["project"], content, fmt)
+
+    def _step_structure() -> None:
+        p, ms = run_structure(holder["project"])
+        holder["project"] = p
+        st.session_state["metrics"]["structure_ms"] = ms
+
+    def _step_risk() -> None:
+        p, ms = run_risk(holder["project"])
+        holder["project"] = p
+        st.session_state["metrics"]["risk_ms"] = ms
+
+    def _step_techniques() -> None:
+        p, ms = run_techniques(holder["project"])
+        holder["project"] = p
+        st.session_state["metrics"]["techniques_ms"] = ms
+
+    def _finalize() -> Project:
+        _save_project(holder["project"])
+        return holder["project"]
+
+    if "structure_ms" not in st.session_state.get("metrics", {}):
+        st.session_state["metrics"] = {}
+
+    out = _run_with_feedback(
+        "Run full pipeline",
+        _finalize,
+        steps=[
+            ("FR 1.0 Import requirements", _step_import),
+            ("FR 1.1 Structure", _step_structure),
+            ("FR 2.0 Risk assessment", _step_risk),
+            ("FR 3.0 Black-box cases (EP / BVA / Decision Table)", _step_techniques),
+        ],
+    )
+    if out is not None:
+        m = st.session_state.get("metrics", {})
+        st.success(
+            f"Pipeline complete: {len(out.requirements)} requirement(s), "
+            f"{len(out.test_cases)} test case(s) "
+            f"(structure {m.get('structure_ms', 0):.0f} ms / "
+            f"risk {m.get('risk_ms', 0):.0f} ms / "
+            f"cases {m.get('techniques_ms', 0):.0f} ms)"
+        )
+        return out
+    return project
+
+
+def _tab_import_form(project: Project) -> Project:
+    """Structured form input for individual requirements (FR 1.0)."""
+    st.caption("Fill in the fields for each requirement and add it to the list.")
+
+    # Init session state for form-built requirements
+    form_key = f"form_reqs_{project.id}"
+    if form_key not in st.session_state:
+        st.session_state[form_key] = []
+
+    # -- Single requirement form --
+    with st.form("req_form"):
+        col_left, col_right = st.columns([1, 2])
+        with col_left:
+            req_id = st.text_input("Requirement ID", placeholder="Auto-generated if blank")
+            req_title = st.text_input("Title", placeholder="Brief title")
+        with col_right:
+            req_text = st.text_area(
+                "Raw requirement text *",
+                placeholder="e.g.: After three failed login attempts the account shall be locked for 30 seconds",
+            )
+
+        st.markdown("**Structured fields** (optional — skip to auto-parse from text)")
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            inputs_raw = st.text_input(
+                "Input fields",
+                placeholder="username, password (comma-separated)",
+            )
+            conditions_raw = st.text_input(
+                "Pre-conditions",
+                placeholder="counter >= 3 (comma-separated)",
+            )
+        with sc2:
+            ranges_raw = st.text_input(
+                "Data ranges",
+                placeholder="username: 3-20 chars, password: 8-32 chars",
+            )
+            expected_raw = st.text_input(
+                "Expected actions",
+                placeholder="account locked for 30s (comma-separated)",
+            )
+
+        submitted = st.form_submit_button("Add requirement", type="primary")
+
+    if submitted:
+        if not req_text.strip():
+            st.error("Raw requirement text is required.")
+        else:
+            rid = req_id.strip() if req_id.strip() else Requirement().id
+            structured = StructuredFields(
+                inputs=[s.strip() for s in inputs_raw.split(",") if s.strip()],
+                data_ranges=[s.strip() for s in ranges_raw.split(",") if s.strip()],
+                conditions=[s.strip() for s in conditions_raw.split(",") if s.strip()],
+                expected_actions=[s.strip() for s in expected_raw.split(",") if s.strip()],
+            )
+            new_req = Requirement(
+                id=rid,
+                title=req_title.strip() or req_text.strip()[:80],
+                raw_text=req_text.strip(),
+                structured=structured,
+            )
+            # Avoid duplicate IDs
+            existing_ids = {r.id for r in st.session_state[form_key]}
+            if new_req.id in existing_ids:
+                new_req.id = Requirement().id
+            st.session_state[form_key].append(new_req)
+            st.rerun()
+
+    # -- List of added requirements --
+    pending = st.session_state[form_key]
+    if pending:
+        st.markdown(f"**{len(pending)} requirement(s) in buffer**")
+        pending_df = pd.DataFrame(
+            [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "text": r.raw_text[:100],
+                    "inputs": ", ".join(r.structured.inputs),
+                    "ranges": ", ".join(r.structured.data_ranges),
+                    "conditions": ", ".join(r.structured.conditions),
+                    "expected": ", ".join(r.structured.expected_actions),
+                }
+                for r in pending
+            ]
+        )
+        st.dataframe(pending_df, use_container_width=True)
+
+        # Clear / Delete
+        c_del, c_clear = st.columns(2)
+        with c_del:
+            del_id = st.selectbox("Remove requirement by ID", [r.id for r in pending], key="del_select")
+            if st.button("Remove selected"):
+                st.session_state[form_key] = [r for r in pending if r.id != del_id]
+                st.rerun()
+        with c_clear:
+            if st.button("Clear all"):
+                st.session_state[form_key] = []
+                st.rerun()
+
+        # -- Import into project --
+        st.divider()
+        imp_col1, imp_col2 = st.columns(2)
+        with imp_col1:
+            if st.button("Import into project", type="primary"):
+                def _do():
+                    project.requirements.extend(st.session_state[form_key])
+                    st.session_state[form_key] = []
+                    _save_project(project)
+                    return project
+                out = _run_with_feedback("Import requirements", _do)
+                if out is not None:
+                    project = out
+                    st.success(f"Imported {len(project.requirements)} requirement(s)")
+                    st.rerun()
+        with imp_col2:
+            if st.button("Import + Structure", type="secondary"):
+                def _do():
+                    project.requirements.extend(st.session_state[form_key])
+                    st.session_state[form_key] = []
+                    p, ms = run_structure(project)
+                    st.session_state["metrics"]["structure_ms"] = ms
+                    _save_project(p)
+                    return p
+                out = _run_with_feedback("Import and structure", _do)
+                if out is not None:
+                    project = out
+                    ms = st.session_state["metrics"].get("structure_ms", 0)
+                    st.success(f"Structured {len(project.requirements)} requirement(s) ({ms:.0f} ms)")
+                    st.rerun()
+    else:
+        st.info("No requirements added yet. Use the form above to add requirements one by one.")
+
+    return project
+
+
 def tab_risk(project: Project) -> Project:
     st.subheader("2. Risk & Priority (FR 2.0)")
+
+    # Weight configuration
+    with st.expander("Risk weight configuration", expanded=True):
+        st.caption("Adjust the weight of each dimension used in risk scoring.")
+        col1, col2, col3 = st.columns(3)
+        new_bi = col1.slider(
+            "Business Impact",
+            0, 100,
+            int(project.risk_weights.business_impact * 100),
+            step=5,
+            format="%d%%",
+            help="Consequence of failure: security, data integrity, revenue, user trust.",
+        )
+        new_fp = col2.slider(
+            "Failure Probability",
+            0, 100,
+            int(project.risk_weights.failure_probability * 100),
+            step=5,
+            format="%d%%",
+            help="Likelihood of failure: complexity, dependencies, historical defects.",
+        )
+        new_de = col3.slider(
+            "Detectability",
+            0, 100,
+            int(project.risk_weights.detectability * 100),
+            step=5,
+            format="%d%%",
+            help="Ease of detection: obvious to users, or silent data corruption.",
+        )
+        total = new_bi + new_fp + new_de
+        if total != 100:
+            st.warning(f"Weights sum to {total}%, not 100%. Scores will be scaled proportionally.")
+        weights_changed = (
+            new_bi != int(project.risk_weights.business_impact * 100)
+            or new_fp != int(project.risk_weights.failure_probability * 100)
+            or new_de != int(project.risk_weights.detectability * 100)
+        )
+
     if not project.requirements:
         st.info("Import requirements on the Import tab first.")
-    elif st.button("Assess risks", type="primary"):
+        return project
+
+    assess_label = "Re-assess with new weights" if weights_changed and project.risks else "Assess risks"
+    if st.button(assess_label, type="primary"):
         def _do():
+            # Normalize weights to sum to 1.0
+            s = new_bi + new_fp + new_de
+            project.risk_weights = RiskWeights(
+                business_impact=new_bi / s if s else 0.4,
+                failure_probability=new_fp / s if s else 0.35,
+                detectability=new_de / s if s else 0.25,
+            )
             p, ms = run_risk(project)
             st.session_state["metrics"]["risk_ms"] = ms
             _save_project(p)
@@ -290,6 +525,7 @@ def tab_risk(project: Project) -> Project:
         out = _run_with_feedback("Risk assessment", _do, success="Risk analysis complete")
         if out is not None:
             project = out
+
     if project.risks:
         st.dataframe(
             pd.DataFrame(

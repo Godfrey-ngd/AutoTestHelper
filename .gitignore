@@ -7,3 +7,5 @@ data/projects/*.json
 .streamlit/
 Intermediate
 llm_debug.log
+CLAUDE.md
+.claude/
