@@ -84,10 +84,17 @@ def try_llm(
     technique: str,
     requirements: list[Requirement],
     risk_map: dict[str, RiskAssessment],
+    feedback_cases: list[dict] | None = None,
 ) -> TechniqueResult | None:
     if not has_llm():
         return None
     system = load_prompt(prompt_file)
+    if feedback_cases:
+        fb_text = _format_feedback(feedback_cases)
+        system += f"\n\n## Improvement feedback\n\n"
+        system += "The following test cases were marked as **invalid** by the test designer. "
+        system += "**Avoid producing similar cases.** Use these as negative examples to improve output quality.\n\n"
+        system += fb_text
     payload = {
         "requirements": [r.model_dump() for r in requirements],
         "risks": [risk_map[r.id].model_dump() for r in requirements if r.id in risk_map],
@@ -96,3 +103,15 @@ def try_llm(
     if data:
         return merge_llm_result(data, technique, risk_map)
     return None
+
+
+def _format_feedback(feedback_cases: list[dict]) -> str:
+    lines: list[str] = []
+    for i, fb in enumerate(feedback_cases, 1):
+        lines.append(
+            f"{i}. **{fb.get('title', '')}** "
+            f"(technique: {fb.get('technique', '')}, requirement: {fb.get('requirement_id', '')})\n"
+            f"   Expected: {fb.get('expected', '')}\n"
+            f"   Steps: {' | '.join(fb.get('steps', [])) if isinstance(fb.get('steps'), list) else fb.get('steps', '')}"
+        )
+    return "\n\n".join(lines)

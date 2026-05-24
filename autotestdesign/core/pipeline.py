@@ -62,7 +62,9 @@ def run_full_pipeline(project: Project) -> tuple[Project, PipelineMetrics]:
     return project, metrics
 
 
-def regenerate_for_requirement(project: Project, requirement_id: str) -> Project:
+def regenerate_for_requirement(
+    project: Project, requirement_id: str, feedback_cases: list | None = None
+) -> Project:
     from autotestdesign.core.techniques import (
         boundary_value,
         decision_table,
@@ -73,6 +75,21 @@ def regenerate_for_requirement(project: Project, requirement_id: str) -> Project
     if not reqs:
         return project
     risk_map = {r.requirement_id: r for r in project.risks}
+
+    # Build feedback payload from invalid cases
+    fb_payload: list[dict] | None = None
+    if feedback_cases:
+        fb_payload = [
+            {
+                "title": tc.title,
+                "technique": tc.technique,
+                "requirement_id": tc.requirement_id,
+                "expected": tc.expected,
+                "steps": tc.steps,
+            }
+            for tc in feedback_cases
+        ]
+
     project.test_cases = [
         tc for tc in project.test_cases if tc.requirement_id != requirement_id
     ]
@@ -84,7 +101,7 @@ def regenerate_for_requirement(project: Project, requirement_id: str) -> Project
         boundary_value.generate,
         decision_table.generate,
     ):
-        res = gen(reqs, risk_map)
+        res = gen(reqs, risk_map, fb_payload)
         project.test_cases.extend(res.test_cases)
         project.coverage_items.extend(res.coverage_items)
         project.strategies.extend(res.strategies)

@@ -96,6 +96,8 @@ copy .env.example .env
 | 6.0 | 导出 JSON / CSV | `core/exporters/` |
 | 7.0 | 用例集优化（可选） | `core/optimizer/` |
 | — | 交互式评审 | Streamlit 页签 + `ReviewEvent` |
+| — | 双向可追溯性（需求 ↔ 覆盖项 ↔ 用例下钻） | `ui/streamlit_app.py` `tab_trace` |
+| — | 基于证据的改进（标记无效用例 + LLM 反馈闭环） | `ui/streamlit_app.py` `tab_improve`、`core/techniques/_helpers.py` |
 
 ---
 

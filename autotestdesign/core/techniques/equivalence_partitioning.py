@@ -77,6 +77,7 @@ def _fallback(
 def generate(
     requirements: list[Requirement],
     risk_map: dict[str, RiskAssessment],
+    feedback_cases: list[dict] | None = None,
 ) -> TechniqueResult:
-    llm = try_llm("equivalence_partitioning.md", "EP", requirements, risk_map)
+    llm = try_llm("equivalence_partitioning.md", "EP", requirements, risk_map, feedback_cases)
     return llm if llm else _fallback(requirements, risk_map)

@@ -40,6 +40,7 @@ from autotestdesign.models.schemas import (
     StructuredFields,
     TestCase,
     TestStrategy,
+    seed_ids_from_project,
 )
 from autotestdesign.storage.project_store import ProjectStore
 
@@ -61,7 +62,10 @@ def _load_project() -> Project | None:
     pid = st.session_state.get("project_id")
     if not pid:
         return None
-    return _get_store().load(pid)
+    project = _get_store().load(pid)
+    if project is not None:
+        seed_ids_from_project(project)
+    return project
 
 
 def _save_project(project: Project) -> None:
@@ -692,6 +696,7 @@ def tab_cases(project: Project) -> Project:
                     "title": tc.title,
                     "technique": tc.technique,
                     "priority": tc.priority.value,
+                    "status": tc.status,
                     "steps": " | ".join(tc.steps),
                     "test_data": str(tc.test_data),
                     "expected": tc.expected,
@@ -707,6 +712,7 @@ def tab_cases(project: Project) -> Project:
                 for _, row in edited.iterrows():
                     tid = str(row.get("id", ""))
                     pr = Priority(str(row.get("priority", "M")))
+                    new_status = str(row.get("status", "active"))
                     tc = TestCase(
                         id=tid or TestCase().id,
                         requirement_id=str(row.get("requirement_id", "")),
@@ -716,11 +722,20 @@ def tab_cases(project: Project) -> Project:
                         steps=str(row.get("steps", "")).split(" | "),
                         test_data=old[tid].test_data if tid in old else {},
                         expected=str(row.get("expected", "")),
+                        status=new_status,
                     )
-                    if tid in old and old[tid].expected != tc.expected:
-                        log_review(
-                            project, "TestCase", tid, "expected", old[tid].expected, tc.expected
-                        )
+                    if tid in old:
+                        if old[tid].expected != tc.expected:
+                            log_review(
+                                project, "TestCase", tid, "expected",
+                                old[tid].expected, tc.expected,
+                            )
+                        if old[tid].status != tc.status:
+                            log_review(
+                                project, "TestCase", tid, "status",
+                                old[tid].status, tc.status,
+                                note="Marked as invalid" if tc.status == "invalid" else "Restored to active",
+                            )
                     new_cases.append(tc)
                 project.test_cases = new_cases
                 _save_project(project)
@@ -743,6 +758,8 @@ def tab_trace(project: Project) -> None:
     if not project.requirements:
         st.info("Import requirements first")
         return
+
+    # — Summary matrix —
     matrix = []
     for r in project.requirements:
         covs = [c for c in project.coverage_items if c.requirement_id == r.id]
@@ -750,27 +767,141 @@ def tab_trace(project: Project) -> None:
         matrix.append(
             {
                 "requirement": r.id,
+                "title": r.title or r.raw_text[:60],
                 "coverage_count": len(covs),
                 "case_count": len(cases),
                 "techniques": ", ".join(sorted({t.technique for t in cases})),
             }
         )
     st.dataframe(pd.DataFrame(matrix), use_container_width=True)
+
+    if not project.coverage_items and not project.test_cases:
+        st.caption("Run the pipeline to generate coverage items and test cases first.")
+        return
+
+    # — Drill-down: requirement → coverage items → test cases —
+    st.divider()
+    st.markdown("### Drill-down: Requirement → Coverage → Test Cases")
+    req_ids = [r.id for r in project.requirements]
+    selected_req = st.selectbox("Select requirement", req_ids, key="trace_drill_req")
+    if selected_req:
+        req = next((r for r in project.requirements if r.id == selected_req), None)
+        if req:
+            st.markdown(f"**{req.id}**: {req.title or req.raw_text[:80]}")
+
+        # Coverage items for this requirement
+        req_covs = [c for c in project.coverage_items if c.requirement_id == selected_req]
+        if req_covs:
+            st.caption(f"Coverage items ({len(req_covs)})")
+            cov_data = [
+                {"id": c.id, "type": c.item_type, "description": c.description}
+                for c in req_covs
+            ]
+            st.dataframe(pd.DataFrame(cov_data), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No coverage items for this requirement.")
+
+        # Test cases for this requirement
+        req_cases = [t for t in project.test_cases if t.requirement_id == selected_req]
+        if req_cases:
+            st.caption(f"Test cases ({len(req_cases)})")
+            case_data = [
+                {
+                    "id": tc.id,
+                    "title": tc.title,
+                    "technique": tc.technique,
+                    "priority": tc.priority.value,
+                    "status": tc.status,
+                }
+                for tc in req_cases
+            ]
+            st.dataframe(pd.DataFrame(case_data), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No test cases for this requirement.")
+
+    # — Reverse trace: test case → requirement —
+    if project.test_cases:
+        st.divider()
+        st.markdown("### Reverse trace: Test Case → Requirement")
+        tc_ids = sorted(tc.id for tc in project.test_cases)
+        selected_tc = st.selectbox("Select test case", tc_ids, key="trace_rev_tc")
+        if selected_tc:
+            tc = next((t for t in project.test_cases if t.id == selected_tc), None)
+            if tc:
+                linked_req = next(
+                    (r for r in project.requirements if r.id == tc.requirement_id), None
+                )
+                req_label = (
+                    f"{linked_req.id}: {linked_req.title}"
+                    if linked_req
+                    else tc.requirement_id or "(none)"
+                )
+                st.markdown(
+                    f"**{tc.id}** ({tc.technique}, {tc.priority.value}) → **{req_label}**"
+                )
+                st.caption(f"Steps: {' | '.join(tc.steps)}")
+                st.caption(f"Expected: {tc.expected}")
+
     if project.trace_links:
-        st.caption(f"{len(project.trace_links)} trace links")
+        st.caption(f"{len(project.trace_links)} total trace links")
 
 
 def tab_improve(project: Project) -> Project:
     st.subheader("7. Evidence-based Improvement")
-    st.caption("Review log captures designer changes for audit trail")
-    if project.review_events:
-        st.dataframe(
-            pd.DataFrame([e.model_dump() for e in project.review_events]),
-            use_container_width=True,
-        )
-    else:
-        st.info("Edit coverage or test cases to record review events")
 
+    # — Invalid cases summary —
+    invalid_cases = [tc for tc in project.test_cases if tc.status == "invalid"]
+    if invalid_cases:
+        st.markdown(f"### {len(invalid_cases)} Invalid Test Case(s)")
+        inv_data = [
+            {
+                "id": tc.id,
+                "requirement_id": tc.requirement_id,
+                "title": tc.title,
+                "technique": tc.technique,
+                "expected": tc.expected,
+            }
+            for tc in invalid_cases
+        ]
+        st.dataframe(pd.DataFrame(inv_data), use_container_width=True, hide_index=True)
+
+        # Regenerate with feedback from invalid cases
+        st.markdown("#### Regenerate with feedback")
+        st.caption(
+            "Invalid cases for the selected requirement will be injected as "
+            "negative examples into the LLM prompt to improve output."
+        )
+        inv_req_ids = sorted({tc.requirement_id for tc in invalid_cases})
+        sel_fb_req = st.selectbox(
+            "Requirement to regenerate", inv_req_ids, key="fb_req_select"
+        )
+        if st.button("Regenerate with feedback", type="primary"):
+            def _do():
+                p = regenerate_for_requirement(project, sel_fb_req, feedback_cases=invalid_cases)
+                _save_project(p)
+                return p
+
+            out = _run_with_feedback(
+                f"Regenerate with feedback ({sel_fb_req})",
+                _do,
+                success="Regenerated using evidence from invalid cases",
+            )
+            if out is not None:
+                project = out
+                new_cases = [t for t in project.test_cases if t.requirement_id == sel_fb_req]
+                st.success(
+                    f"Regenerated {len(new_cases)} case(s) for {sel_fb_req} "
+                    f"using {len(invalid_cases)} invalid case(s) as feedback"
+                )
+    else:
+        st.info(
+            "No invalid cases yet. Mark cases as invalid in the "
+            "Test Cases tab by changing their status to 'invalid'."
+        )
+
+    # — Manual improvement —
+    st.divider()
+    st.markdown("### Manual improvement")
     if st.button("Add improvement test case (manual)"):
         req_id = project.requirements[0].id if project.requirements else ""
         tc = TestCase(
@@ -793,6 +924,18 @@ def tab_improve(project: Project) -> Project:
         project.test_cases.append(tc)
         _save_project(project)
         st.success("Added improvement case")
+        st.rerun()
+
+    # — Review log —
+    st.divider()
+    st.markdown("### Review audit log")
+    if project.review_events:
+        st.dataframe(
+            pd.DataFrame([e.model_dump() for e in project.review_events]),
+            use_container_width=True,
+        )
+    else:
+        st.info("Edit coverage or test cases to record review events")
     return project
 
 
