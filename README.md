@@ -1,47 +1,47 @@
 # Assignment 2 — AutoTestDesign
 
-AI-driven test **design** tool (requirements → risk → black-box cases → review → export) plus a **login module** as the system under test (SUT) for assignment reports and automated tests.
+AI 驱动的测试**用例设计**工具（需求 → 风险分析 → 黑盒用例 → 评审 → 导出），同时内置一个**登录模块**作为被测系统（SUT），用于作业报告和自动化测试。
 
 ---
 
-## Documentation
+## 文档
 
-| Document | Language | Contents |
-|----------|----------|----------|
-| **[docs/用户使用手册.md](docs/用户使用手册.md)** | 中文 | Streamlit UI, import formats, tabs, SUT, FAQ, demo flow |
-| **[docs/project-templates.md](docs/project-templates.md)** | EN | 7 ready-made projects (name + target app + CSV requirements) |
-| [docs/risk-analysis.md](docs/risk-analysis.md) | EN draft | Risk report (SUT) — fill team info, export PDF |
-| [docs/test-plan.md](docs/test-plan.md) | EN draft | Test plan (SUT) |
-| [docs/detailed-design-exec.md](docs/detailed-design-exec.md) | EN draft | Detailed design & execution (SUT) |
-| [docs/performance-nfr.md](docs/performance-nfr.md) | EN | Performance notes (NFR) |
+| 文档 | 语言 | 内容 |
+|------|------|------|
+| **[docs/用户使用手册.md](docs/用户使用手册.md)** | 中文 | Streamlit 界面、导入格式、功能页签、被测系统、常见问题、操作流程 |
+| **[docs/project-templates.md](docs/project-templates.md)** | 英文 | 7 个现成的测试项目模板（名称 + 被测应用 + CSV 需求） |
+| [docs/risk-analysis.md](docs/risk-analysis.md) | 英文草案 | 风险分析报告（SUT）— 填写团队信息，导出 PDF |
+| [docs/test-plan.md](docs/test-plan.md) | 英文草案 | 测试计划（SUT） |
+| [docs/detailed-design-exec.md](docs/detailed-design-exec.md) | 英文草案 | 详细设计与执行（SUT） |
+| [docs/performance-nfr.md](docs/performance-nfr.md) | 英文 | 性能测试说明（NFR） |
 
-**New users:** install (below) → read **用户使用手册** §快速上手 → copy requirements from **project-templates** Template 1.
+**新用户上手路径：** 完成下方安装 → 阅读 **用户使用手册** 的 §快速上手 → 从 **project-templates** 模板 1 复制需求数据。
 
 ---
 
-## Tool vs system under test
+## 工具与被测系统的关系
 
 ```text
 ┌─────────────────────────────┐     ┌──────────────────────────┐
-│  AutoTestDesign (you build) │     │  target-app (SUT)        │
-│  Streamlit :8501            │     │  Flask login :5000       │
-│  Design cases, export CSV   │────▶│  Run manual / pytest     │
+│  AutoTestDesign（测试设计工具）│     │  target-app（被测系统）    │
+│  Streamlit :8501            │     │  Flask 登录 :5000        │
+│  设计用例，导出 CSV          │────▶│  手动测试 / pytest 自动化  │
 └─────────────────────────────┘     └──────────────────────────┘
 ```
 
-| Path | Role |
+| 目录 | 用途 |
 |------|------|
-| `autotestdesign/` | Tool source, `prompts/`, Streamlit UI |
-| `target-app/` | Login SUT (username/password, lockout) |
-| `target-app-tests/` | Automated tests against SUT |
-| `sample_data/` | Example requirement CSV files |
-| `data/projects/` | Saved projects (JSON, gitignored) |
+| `autotestdesign/` | 工具源码、`prompts/` 提示词、Streamlit 界面 |
+| `target-app/` | 登录被测系统（用户名/密码、锁定机制） |
+| `target-app-tests/` | 针对被测系统的自动化测试 |
+| `sample_data/` | 示例需求 CSV 文件 |
+| `data/projects/` | 已保存的项目（JSON，已加入 .gitignore） |
 
 ---
 
-## Install (Conda)
+## 安装（Conda）
 
-Requires [Anaconda](https://www.anaconda.com/) or Miniconda.
+需要安装 [Anaconda](https://www.anaconda.com/) 或 Miniconda。
 
 ```powershell
 cd C:\Users\86182\Desktop\Assignment2
@@ -50,12 +50,12 @@ conda activate autotestdesign
 copy .env.example .env
 ```
 
-Optional: set `OPENAI_API_KEY` in `.env` for LLM mode. If unset, the tool uses a **rule-based fallback** (offline, fast). See manual §LLM.
+可选：在 `.env` 中配置 `OPENAI_API_KEY` 以启用 LLM 模式。未配置时，工具使用**基于规则的降级方案**（离线、快速）。详见用户手册 §LLM。
 
-Update existing env: `conda env update -f environment.yml --prune`  
-Windows shortcut: double-click `setup_conda.bat`.
+更新已有环境：`conda env update -f environment.yml --prune`  
+Windows 快捷方式：双击 `setup_conda.bat`。
 
-### pip / venv (alternative)
+### pip / venv（备选方案）
 
 ```powershell
 python -m venv .venv
@@ -66,36 +66,36 @@ copy .env.example .env
 
 ---
 
-## Command cheat sheet
+## 命令速查表
 
-All commands assume `conda activate autotestdesign` and project root.
+以下命令均需先执行 `conda activate autotestdesign`，并在项目根目录下运行。
 
-| Goal | Command |
-|------|---------|
-| **Test design UI** | `streamlit run autotestdesign/ui/streamlit_app.py` → http://localhost:8501 |
-| **Login SUT** | `python target-app/app.py` → http://127.0.0.1:5000 |
-| **Automated tests** | `pytest target-app-tests/test_login_client.py autotestdesign/tests -v` |
-| **Performance benchmark** | `python scripts/benchmark_pipeline.py` |
-| **REST API (optional)** | `uvicorn autotestdesign.app.main:app --reload --port 8000` |
-| **Playwright E2E (optional)** | Start SUT, then `pytest target-app-tests/test_login.py -v` |
+| 用途 | 命令 |
+|------|------|
+| **测试设计界面** | `streamlit run autotestdesign/ui/streamlit_app.py` → http://localhost:8501 |
+| **启动登录被测系统** | `python target-app/app.py` → http://127.0.0.1:5000 |
+| **运行自动化测试** | `pytest target-app-tests/test_login_client.py autotestdesign/tests -v` |
+| **性能基准测试** | `python scripts/benchmark_pipeline.py` |
+| **REST API（可选）** | `uvicorn autotestdesign.app.main:app --reload --port 8000` |
+| **Playwright E2E（可选）** | 先启动被测系统，再执行 `pytest target-app-tests/test_login.py -v` |
 
-Batch shortcuts: `run_ui.bat`, `run_target_app.bat`.
+批处理快捷方式：`run_ui.bat`、`run_target_app.bat`。
 
 ---
 
-## Implemented requirements
+## 已实现的功能
 
-| FR | Feature | Location |
-|----|---------|----------|
-| 1.0 | Import CSV / text / paste | `core/importers/` |
-| 1.1 | Structure requirements | `core/parser/`, `prompts/structure_requirement.md` |
-| 2.0 | Risk & priority H/M/L | `core/risk/` |
-| 3.0 | EP, BVA, decision table | `core/techniques/` |
-| 4.0 | State model (optional) | `core/whitebox/` |
-| 5.0 | Test oracle (optional) | `core/oracle/` |
-| 6.0 | Export JSON / CSV | `core/exporters/` |
-| 7.0 | Suite optimization (optional) | `core/optimizer/` |
-| — | Interactive review | Streamlit tabs + `ReviewEvent` |
+| 功能编号 | 功能 | 代码位置 |
+|----------|------|----------|
+| 1.0 | 导入 CSV / 文本 / 粘贴 | `core/importers/` |
+| 1.1 | 需求结构化 | `core/parser/`、`prompts/structure_requirement.md` |
+| 2.0 | 风险等级与优先级 H/M/L | `core/risk/` |
+| 3.0 | 等价类划分、边界值分析、判定表 | `core/techniques/` |
+| 4.0 | 状态模型（可选） | `core/whitebox/` |
+| 5.0 | 测试预言（可选） | `core/oracle/` |
+| 6.0 | 导出 JSON / CSV | `core/exporters/` |
+| 7.0 | 用例集优化（可选） | `core/optimizer/` |
+| — | 交互式评审 | Streamlit 页签 + `ReviewEvent` |
 
 ---
 
