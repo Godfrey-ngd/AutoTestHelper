@@ -8,9 +8,34 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-from dotenv import load_dotenv
 
-load_dotenv()
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+
+
+def _read_env_file() -> dict[str, str]:
+    """Read .env into a dict directly — no dotenv, no os.environ."""
+    result: dict[str, str] = {}
+    if not _ENV_PATH.exists():
+        return result
+    for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key and val:
+            result[key] = val
+    return result
+
+
+def _load_env_file() -> None:
+    """Manually load .env to avoid dotenv path resolution issues."""
+    for key, val in _read_env_file().items():
+        os.environ[key] = val
+
+
+_load_env_file()
 
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 
@@ -44,15 +69,26 @@ def chat_json(
     *,
     temperature: float = 0.2,
 ) -> Optional[Any]:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    # Read directly from .env file to avoid any os.environ interference
+    env = _read_env_file()
+    api_key = env.get("OPENAI_API_KEY", "").strip()
+    base_url = env.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+    # Debug: log actual values at call time
+    _log_path = Path(__file__).resolve().parents[2] / "llm_debug.log"
+    with open(_log_path, "a") as _f:
+        _f.write(f"api_key={api_key[:15]}... base_url={base_url}\n")
+
     if not api_key:
         return None
 
+    import httpx
     from openai import OpenAI
 
     client = OpenAI(
         api_key=api_key,
-        base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        base_url=base_url,
+        http_client=httpx.Client(timeout=120.0),
     )
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     response = client.chat.completions.create(
@@ -69,4 +105,4 @@ def chat_json(
 
 
 def has_llm() -> bool:
-    return bool(os.getenv("OPENAI_API_KEY", "").strip())
+    return bool(_read_env_file().get("OPENAI_API_KEY", "").strip())

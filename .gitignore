@@ -5,3 +5,5 @@ __pycache__/
 data/projects/*.json
 .pytest_cache/
 .streamlit/
+Intermediate
+llm_debug.log
