@@ -9,8 +9,7 @@ from autotestdesign.core.importers.requirement_importer import parse_paste
 from autotestdesign.core.parser.requirement_parser import structure_requirements
 from autotestdesign.core.risk.risk_analyzer import assess_risks
 from autotestdesign.core.techniques.base import TechniqueResult, generate_all_techniques
-from autotestdesign.core.whitebox.state_model import build_login_state_model
-from autotestdesign.models.schemas import Project, TraceLink
+from autotestdesign.models.schemas import Project, TestCase, TraceLink
 
 
 @dataclass
@@ -109,10 +108,78 @@ def regenerate_for_requirement(
     return project
 
 
-def add_whitebox(project: Project) -> Project:
-    diagram, cases = build_login_state_model(project)
-    project.state_diagram = diagram
-    project.test_cases.extend(cases)
+def add_whitebox(
+    project: Project,
+    model_text: str | None = None,
+    criteria: list[str] | None = None,
+    optimize: bool = True,
+) -> Project:
+    """Add white-box test cases from a state machine or control flow graph.
+
+    Args:
+        project: Current project
+        model_text: Mermaid or JSON model definition. If None, uses built-in login model.
+        criteria: Coverage criteria names. Default depends on model type.
+        optimize: Whether to apply greedy / Chinese postman optimization.
+    """
+    from autotestdesign.core.whitebox.models import StateMachine, ControlFlowGraph, WhiteboxResult
+    from autotestdesign.core.whitebox.model_parser import detect_and_parse
+    from autotestdesign.core.whitebox.coverage import run_coverage
+    from autotestdesign.core.whitebox.optimizer import optimize_result
+    from autotestdesign.core.whitebox.state_model import LOGIN_STATE_DIAGRAM
+
+    model = None
+    if model_text and model_text.strip():
+        model = detect_and_parse(model_text.strip())
+
+    if model is None:
+        model = detect_and_parse(LOGIN_STATE_DIAGRAM)
+        if model is None:
+            return project
+
+    project.state_diagram = model_text if model_text else LOGIN_STATE_DIAGRAM
+
+    if criteria is None:
+        if isinstance(model, StateMachine):
+            criteria = ["state", "transition"]
+        else:
+            criteria = ["statement", "branch", "path"]
+
+    results = run_coverage(model, criteria)
+
+    sm_for_opt = model if isinstance(model, StateMachine) else None
+    if optimize:
+        results = [optimize_result(r, sm_for_opt) for r in results]
+
+    first_req = project.requirements[0].id if project.requirements else ""
+    for result in results:
+        for i, seq in enumerate(result.test_sequences):
+            path_desc = " -> ".join(seq)
+            technique = "StateTransition" if result.model_type == "state_machine" else "ControlFlowPath"
+            project.test_cases.append(
+                TestCase(
+                    title=f"WB-{technique}-{i + 1}: {path_desc[:60]}",
+                    requirement_id=first_req,
+                    technique=technique,
+                    preconditions=seq[0] if seq else "",
+                    steps=[f"Follow path: {path_desc}"],
+                    expected=f"Reach: {seq[-1]}" if seq else "",
+                )
+            )
+
+    combined = WhiteboxResult()
+    if results:
+        combined.model_type = results[0].model_type
+        combined.coverage_targets = []
+        combined.test_sequences = []
+        for r in results:
+            combined.coverage_targets.extend(r.coverage_targets)
+            combined.test_sequences.extend(r.test_sequences)
+        total = len(combined.coverage_targets)
+        covered = sum(1 for t in combined.coverage_targets if t.covered)
+        combined.coverage_pct = (covered / total * 100) if total else 100
+    project.whitebox_result = combined.model_dump()
+
     _rebuild_trace_links(project)
     return project
 

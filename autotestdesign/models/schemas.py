@@ -193,3 +193,4 @@ class Project(BaseModel):
     review_events: list[ReviewEvent] = Field(default_factory=list)
     state_diagram: Optional[str] = None
     optimized_case_ids: list[str] = Field(default_factory=list)
+    whitebox_result: Optional[dict] = None
