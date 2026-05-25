@@ -120,9 +120,11 @@ def parse_cfg_mermaid(mermaid: str) -> ControlFlowGraph | None:
                 cfg.nodes.append(CFGNode(id=nid, label=label, node_type=node_type))
 
         # Edge: N1 --> N2 or N1 -->|label| N2 or N1 -- label --> N2
+        # Strip shape annotations so A[Start] --> B{Decision} → A --> B
+        stripped = re.sub(r'[\[\(\{].*?[\]\)\}]', '', line)
         for m in re.finditer(
             r'(\w+)\s*(-->|---)\s*(?:\|(.+?)\||(\w+))?\s*(-->)?\s*(\w+)',
-            line,
+            stripped,
         ):
             source = m.group(1)
             target = m.group(6) or m.group(4) or ""
@@ -145,11 +147,19 @@ def parse_cfg_mermaid(mermaid: str) -> ControlFlowGraph | None:
         if nid not in {n.id for n in cfg.nodes}:
             cfg.nodes.append(CFGNode(id=nid, label=nid, node_type="statement"))
 
-    # Mark entry (first node) and exit (node with no outgoing edges)
+    # Mark entry (node with no incoming edges) and exit (node with no outgoing edges)
     if cfg.nodes:
-        cfg.nodes[0].node_type = "entry"
         outgoing = {e["source"] for e in edges_raw}
         all_targets = {e["target"] for e in edges_raw}
+        # Entry: node that has outgoing but no incoming edges
+        for n in cfg.nodes:
+            if n.id in outgoing and n.id not in all_targets:
+                n.node_type = "entry"
+                break
+        else:
+            # Fallback: first node
+            cfg.nodes[0].node_type = "entry"
+        # Exit: node that has incoming but no outgoing edges
         for n in cfg.nodes:
             if n.id in all_targets and n.id not in outgoing:
                 n.node_type = "exit"
