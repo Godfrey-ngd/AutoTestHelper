@@ -1,0 +1,105 @@
+{
+  "_description": "AutoTestDesign 完整项目导出结构 (JSON Schema 示例)",
+  "_export_command": "Streamlit UI → Export tab → Download JSON, 或 python -c \"from autotestdesign.core.exporters import export_json_bytes; ...\"",
+
+  "id": "PRJ-xxxxxxxx",
+  "name": "Login Module Test Design",
+  "target_app_description": "Flask login web module with validation and lockout",
+  "created_at": "2026-05-25T10:30:00Z",
+
+  "risk_weights": {
+    "business_impact": 0.40,
+    "failure_probability": 0.35,
+    "detectability": 0.25
+  },
+
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "raw_text": "Username field: must be 3-20 characters",
+      "title": "Username length validation",
+      "structured": {
+        "inputs": ["username"],
+        "data_ranges": ["length 3-20"],
+        "conditions": ["input is submitted"],
+        "expected_actions": ["validate length, show error if invalid"]
+      }
+    }
+  ],
+
+  "risks": [
+    {
+      "requirement_id": "REQ-001",
+      "score": 85,
+      "priority": "H",
+      "rationale": "Authentication input — high business impact"
+    }
+  ],
+
+  "coverage_items": [
+    {
+      "id": "COV-001",
+      "requirement_id": "REQ-001",
+      "description": "Username length < 3 (invalid equivalence class)",
+      "technique": "EP",
+      "risk_level": "H"
+    }
+  ],
+
+  "strategies": [
+    {
+      "id": "STR-001",
+      "name": "Input validation — equivalence partitioning",
+      "technique": "EquivalencePartitioning",
+      "rationale": "Partition username/password into valid/invalid classes",
+      "coverage_item_ids": ["COV-001"]
+    }
+  ],
+
+  "test_cases": [
+    {
+      "id": "TC-001",
+      "requirement_id": "REQ-001",
+      "title": "Username too short (2 chars)",
+      "technique": "BVA",
+      "priority": "H",
+      "preconditions": "Login page is accessible",
+      "steps": [
+        "Open login page",
+        "Enter username 'ab'",
+        "Enter password 'Pass1234'",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "ab",
+        "password": "Pass1234"
+      },
+      "expected": "invalid username",
+      "risk_score": 85,
+      "coverage_ids": ["COV-001"],
+      "strategy_id": "STR-001",
+      "status": "active"
+    }
+  ],
+
+  "trace_links": [
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-001",
+      "test_case_id": "TC-001"
+    }
+  ],
+
+  "review_events": [
+    {
+      "timestamp": "2026-05-25T10:35:00Z",
+      "test_case_id": "TC-001",
+      "action": "modified",
+      "detail": "Adjusted expected result wording to match SUT message",
+      "previous_expected": "username must be 3-20 characters"
+    }
+  ],
+
+  "optimized_case_ids": ["TC-001"],
+  "whitebox_result": null
+}

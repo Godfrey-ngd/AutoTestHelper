@@ -1,0 +1,1697 @@
+{
+  "id": "PRJ-bc3bcc45",
+  "name": "Login Module Test",
+  "target_app_description": "",
+  "risk_weights": {
+    "business_impact": 0.4,
+    "failure_probability": 0.35,
+    "detectability": 0.25
+  },
+  "created_at": "2026-05-25T13:28:50.399329Z",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "raw_text": "The system shall accept username between 3 and 20 characters",
+      "title": "Username length validation (3-20 characters)",
+      "structured": {
+        "inputs": [
+          "username"
+        ],
+        "data_ranges": [
+          "username: length between 3 and 20 characters, non-empty"
+        ],
+        "conditions": [
+          "System is ready to accept username input"
+        ],
+        "expected_actions": [
+          "Accept username of length 3-20 characters",
+          "Reject username shorter than 3 characters",
+          "Reject username longer than 20 characters"
+        ]
+      }
+    },
+    {
+      "id": "REQ-002",
+      "raw_text": "The system shall accept password between 8 and 32 characters with at least one digit",
+      "title": "Password complexity validation (8-32 chars, at least one digit)",
+      "structured": {
+        "inputs": [
+          "password"
+        ],
+        "data_ranges": [
+          "password: length between 8 and 32 characters",
+          "password: must contain at least one digit"
+        ],
+        "conditions": [
+          "System is ready to accept password input"
+        ],
+        "expected_actions": [
+          "Accept password meeting length and digit requirement",
+          "Reject password shorter than 8 characters",
+          "Reject password longer than 32 characters",
+          "Reject password without at least one digit"
+        ]
+      }
+    },
+    {
+      "id": "REQ-003",
+      "raw_text": "Empty username shall show error message username is required",
+      "title": "Empty username error message",
+      "structured": {
+        "inputs": [
+          "username"
+        ],
+        "data_ranges": [
+          "username: empty"
+        ],
+        "conditions": [
+          "User submits the login form with username field empty"
+        ],
+        "expected_actions": [
+          "Display error message 'username is required'"
+        ]
+      }
+    },
+    {
+      "id": "REQ-004",
+      "raw_text": "Empty password shall show error message password is required",
+      "title": "Empty password error message",
+      "structured": {
+        "inputs": [
+          "password"
+        ],
+        "data_ranges": [
+          "password: empty"
+        ],
+        "conditions": [
+          "User submits the login form with password field empty"
+        ],
+        "expected_actions": [
+          "Display error message 'password is required'"
+        ]
+      }
+    },
+    {
+      "id": "REQ-005",
+      "raw_text": "Valid credentials user01 and Pass1234 shall redirect to success page",
+      "title": "Login with valid credentials redirects to success page",
+      "structured": {
+        "inputs": [
+          "username",
+          "password"
+        ],
+        "data_ranges": [
+          "username: 'user01'",
+          "password: 'Pass1234'"
+        ],
+        "conditions": [
+          "User submits login form with username 'user01' and password 'Pass1234'"
+        ],
+        "expected_actions": [
+          "Authenticate user",
+          "Redirect to success page"
+        ]
+      }
+    },
+    {
+      "id": "REQ-006",
+      "raw_text": "Invalid credentials shall show error invalid credentials",
+      "title": "Error message for invalid credentials",
+      "structured": {
+        "inputs": [
+          "username",
+          "password"
+        ],
+        "data_ranges": [
+          "username: any value not part of valid credentials",
+          "password: any value not matching the corresponding valid password"
+        ],
+        "conditions": [
+          "User submits login form with credentials that do not match any valid account"
+        ],
+        "expected_actions": [
+          "Display error message 'invalid credentials'"
+        ]
+      }
+    },
+    {
+      "id": "REQ-007",
+      "raw_text": "After three failed login attempts the account shall be locked for 30 seconds",
+      "title": "Account lock after 3 failed login attempts",
+      "structured": {
+        "inputs": [],
+        "data_ranges": [
+          "failed attempts count: 3",
+          "lock duration: 30 seconds"
+        ],
+        "conditions": [
+          "Three consecutive failed login attempts occur for the same account"
+        ],
+        "expected_actions": [
+          "Lock the account for 30 seconds",
+          "Prevent further login attempts during the lock period"
+        ]
+      }
+    }
+  ],
+  "risks": [
+    {
+      "requirement_id": "REQ-001",
+      "score": 56,
+      "priority": "M",
+      "reason": "Username length validation with boundary constraints (3,20) increases failure probability; moderate business impact as it affects user input integrity; failure is easily detectable."
+    },
+    {
+      "requirement_id": "REQ-002",
+      "score": 70,
+      "priority": "M",
+      "reason": "Security-sensitive password rule with multiple constraints (length, digit) raises failure probability; accepting invalid passwords could allow weak credentials, raising business impact; detectability is moderate."
+    },
+    {
+      "requirement_id": "REQ-003",
+      "score": 22,
+      "priority": "L",
+      "reason": "Low-impact error message for empty username; simple condition has low failure probability; omission of error message is immediately detectable."
+    },
+    {
+      "requirement_id": "REQ-004",
+      "score": 22,
+      "priority": "L",
+      "reason": "Similar to REQ-003: empty password error has low business impact, low failure probability, and is easily detectable."
+    },
+    {
+      "requirement_id": "REQ-005",
+      "score": 62,
+      "priority": "M",
+      "reason": "Core login success flow; high business impact if redirection fails; integration complexity contributes to moderate failure probability; failure is obvious to testers."
+    },
+    {
+      "requirement_id": "REQ-006",
+      "score": 54,
+      "priority": "M",
+      "reason": "Invalid credentials error message; moderate business impact if feedback is missing; multiple invalid combinations increase test complexity; failure is visible."
+    },
+    {
+      "requirement_id": "REQ-007",
+      "score": 87,
+      "priority": "H",
+      "reason": "Critical security lockout mechanism prevents brute force; failure would have high impact on user accounts; complex stateful logic (counter, timer) significantly raises failure probability; silent failure possible."
+    }
+  ],
+  "coverage_items": [
+    {
+      "id": "COV-028",
+      "requirement_id": "REQ-001",
+      "item_type": "equivalence_class",
+      "description": "Valid usernames: 3-20 characters"
+    },
+    {
+      "id": "COV-029",
+      "requirement_id": "REQ-001",
+      "item_type": "equivalence_class",
+      "description": "Invalid usernames: below 3 characters"
+    },
+    {
+      "id": "COV-030",
+      "requirement_id": "REQ-001",
+      "item_type": "equivalence_class",
+      "description": "Invalid usernames: above 20 characters"
+    },
+    {
+      "id": "COV-031",
+      "requirement_id": "REQ-003",
+      "item_type": "equivalence_class",
+      "description": "Invalid usernames: empty input"
+    },
+    {
+      "id": "COV-032",
+      "requirement_id": "REQ-002",
+      "item_type": "equivalence_class",
+      "description": "Valid passwords: 8-32 characters, at least one digit"
+    },
+    {
+      "id": "COV-033",
+      "requirement_id": "REQ-004",
+      "item_type": "equivalence_class",
+      "description": "Invalid passwords: empty input"
+    },
+    {
+      "id": "COV-034",
+      "requirement_id": "REQ-002",
+      "item_type": "equivalence_class",
+      "description": "Invalid passwords: below 8 characters"
+    },
+    {
+      "id": "COV-035",
+      "requirement_id": "REQ-002",
+      "item_type": "equivalence_class",
+      "description": "Invalid passwords: above 32 characters"
+    },
+    {
+      "id": "COV-036",
+      "requirement_id": "REQ-002",
+      "item_type": "equivalence_class",
+      "description": "Invalid passwords: no digit"
+    },
+    {
+      "id": "COV-037",
+      "requirement_id": "REQ-005",
+      "item_type": "equivalence_class",
+      "description": "Valid credentials: exact pair 'user01'/'Pass1234'"
+    },
+    {
+      "id": "COV-038",
+      "requirement_id": "REQ-006",
+      "item_type": "equivalence_class",
+      "description": "Invalid credentials: any pair not matching valid credentials"
+    },
+    {
+      "id": "COV-039",
+      "requirement_id": "REQ-007",
+      "item_type": "equivalence_class",
+      "description": "Failed attempts count <3 (no lock)"
+    },
+    {
+      "id": "COV-040",
+      "requirement_id": "REQ-007",
+      "item_type": "equivalence_class",
+      "description": "Failed attempts count =3 (triggers lock)"
+    },
+    {
+      "id": "COV-001",
+      "requirement_id": "REQ-001",
+      "item_type": "boundary",
+      "description": "Boundary: username length = min-1 (2 chars)"
+    },
+    {
+      "id": "COV-002",
+      "requirement_id": "REQ-001",
+      "item_type": "boundary",
+      "description": "Boundary: username length = min (3 chars)"
+    },
+    {
+      "id": "COV-003",
+      "requirement_id": "REQ-001",
+      "item_type": "boundary",
+      "description": "Boundary: username length = min+1 (4 chars)"
+    },
+    {
+      "id": "COV-004",
+      "requirement_id": "REQ-001",
+      "item_type": "boundary",
+      "description": "Boundary: username length = max-1 (19 chars)"
+    },
+    {
+      "id": "COV-005",
+      "requirement_id": "REQ-001",
+      "item_type": "boundary",
+      "description": "Boundary: username length = max (20 chars)"
+    },
+    {
+      "id": "COV-006",
+      "requirement_id": "REQ-001",
+      "item_type": "boundary",
+      "description": "Boundary: username length = max+1 (21 chars)"
+    },
+    {
+      "id": "COV-007",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password length = min-1 (7 chars) with digit"
+    },
+    {
+      "id": "COV-008",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password length = min (8 chars) with digit"
+    },
+    {
+      "id": "COV-009",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password length = min+1 (9 chars) with digit"
+    },
+    {
+      "id": "COV-010",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password length = max-1 (31 chars) with digit"
+    },
+    {
+      "id": "COV-011",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password length = max (32 chars) with digit"
+    },
+    {
+      "id": "COV-012",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password length = max+1 (33 chars) with digit"
+    },
+    {
+      "id": "COV-013",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password contains 0 digits (just outside constraint)"
+    },
+    {
+      "id": "COV-014",
+      "requirement_id": "REQ-002",
+      "item_type": "boundary",
+      "description": "Boundary: password contains 1 digit (just inside constraint)"
+    },
+    {
+      "id": "COV-015",
+      "requirement_id": "REQ-003",
+      "item_type": "boundary",
+      "description": "Boundary: username is empty (0 characters)"
+    },
+    {
+      "id": "COV-016",
+      "requirement_id": "REQ-004",
+      "item_type": "boundary",
+      "description": "Boundary: password is empty (0 characters)"
+    },
+    {
+      "id": "COV-017",
+      "requirement_id": "REQ-007",
+      "item_type": "boundary",
+      "description": "Boundary: failed attempts count = max-1 (2, no lock)"
+    },
+    {
+      "id": "COV-018",
+      "requirement_id": "REQ-007",
+      "item_type": "boundary",
+      "description": "Boundary: failed attempts count = max (3, lockout triggered)"
+    },
+    {
+      "id": "COV-019",
+      "requirement_id": "REQ-007",
+      "item_type": "boundary",
+      "description": "Boundary: failed attempts count = max+1 (4, during lockout)"
+    },
+    {
+      "id": "COV-020",
+      "requirement_id": "REQ-003",
+      "item_type": "decision_rule",
+      "description": "Rule R1: C1=N → A1 (username required)"
+    },
+    {
+      "id": "COV-021",
+      "requirement_id": "REQ-001",
+      "item_type": "decision_rule",
+      "description": "Rule R2: C1=Y,C2=N → A2 (username invalid length)"
+    },
+    {
+      "id": "COV-022",
+      "requirement_id": "REQ-004",
+      "item_type": "decision_rule",
+      "description": "Rule R3: C1=Y,C2=Y,C3=N → A3 (password required)"
+    },
+    {
+      "id": "COV-023",
+      "requirement_id": "REQ-002",
+      "item_type": "decision_rule",
+      "description": "Rule R4: C1=Y,C2=Y,C3=Y,C4=N → A4 (password invalid length)"
+    },
+    {
+      "id": "COV-024",
+      "requirement_id": "REQ-002",
+      "item_type": "decision_rule",
+      "description": "Rule R5: C1=Y,C2=Y,C3=Y,C4=Y,C5=N → A5 (no digit)"
+    },
+    {
+      "id": "COV-025",
+      "requirement_id": "REQ-007",
+      "item_type": "decision_rule",
+      "description": "Rule R6: C1=Y,C2=Y,C3=Y,C4=Y,C5=Y,C7=Y → A8 (account locked)"
+    },
+    {
+      "id": "COV-026",
+      "requirement_id": "REQ-006",
+      "item_type": "decision_rule",
+      "description": "Rule R7: C1=Y,C2=Y,C3=Y,C4=Y,C5=Y,C6=N,C7=N → A7 (invalid credentials, lock if counter reaches 3)"
+    },
+    {
+      "id": "COV-027",
+      "requirement_id": "REQ-005",
+      "item_type": "decision_rule",
+      "description": "Rule R8: C1=Y,C2=Y,C3=Y,C4=Y,C5=Y,C6=Y,C7=N → A6 (successful login)"
+    }
+  ],
+  "strategies": [
+    {
+      "id": "STR-003",
+      "technique": "EP",
+      "rationale": "ISO 29119-4 EP applied to requirements",
+      "coverage_ids": [
+        "COV-028",
+        "COV-029",
+        "COV-030",
+        "COV-031",
+        "COV-032",
+        "COV-033",
+        "COV-034",
+        "COV-035",
+        "COV-036",
+        "COV-037",
+        "COV-038",
+        "COV-039",
+        "COV-040"
+      ],
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-003",
+        "REQ-002",
+        "REQ-004",
+        "REQ-005",
+        "REQ-006",
+        "REQ-007"
+      ]
+    },
+    {
+      "id": "STR-001",
+      "technique": "BVA",
+      "rationale": "ISO 29119-4 BVA applied to requirements",
+      "coverage_ids": [
+        "COV-001",
+        "COV-002",
+        "COV-003",
+        "COV-004",
+        "COV-005",
+        "COV-006",
+        "COV-007",
+        "COV-008",
+        "COV-009",
+        "COV-010",
+        "COV-011",
+        "COV-012",
+        "COV-013",
+        "COV-014",
+        "COV-015",
+        "COV-016",
+        "COV-017",
+        "COV-018",
+        "COV-019"
+      ],
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-002",
+        "REQ-003",
+        "REQ-004",
+        "REQ-007"
+      ]
+    },
+    {
+      "id": "STR-002",
+      "technique": "DecisionTable",
+      "rationale": "ISO 29119-4 DecisionTable applied to requirements",
+      "coverage_ids": [
+        "COV-020",
+        "COV-021",
+        "COV-022",
+        "COV-023",
+        "COV-024",
+        "COV-025",
+        "COV-026",
+        "COV-027"
+      ],
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-001",
+        "REQ-004",
+        "REQ-002",
+        "REQ-007",
+        "REQ-006",
+        "REQ-005"
+      ]
+    }
+  ],
+  "test_cases": [
+    {
+      "id": "TC-028",
+      "requirement_id": "REQ-001",
+      "title": "EP-valid username within range",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'testuser' in the username field",
+        "Enter 'Pass1234' in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "testuser",
+        "password": "Pass1234"
+      },
+      "expected": "No error message about username length; if credentials invalid, error 'invalid credentials' displayed (username length validation passed).",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-028"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-029",
+      "requirement_id": "REQ-001",
+      "title": "EP-username too short",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'ab' in the username field",
+        "Enter 'Pass1234' in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "ab",
+        "password": "Pass1234"
+      },
+      "expected": "Error message indicating invalid username (e.g., 'Username must be at least 3 characters') is displayed. Login not performed.",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-029"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-030",
+      "requirement_id": "REQ-001",
+      "title": "EP-username too long",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'abcdefghijklmnopqrstu' (21 characters) in the username field",
+        "Enter 'Pass1234' in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "abcdefghijklmnopqrstu",
+        "password": "Pass1234"
+      },
+      "expected": "Error message indicating invalid username (e.g., 'Username must be at most 20 characters') is displayed. Login not performed.",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-030"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-031",
+      "requirement_id": "REQ-003",
+      "title": "EP-empty username",
+      "technique": "EP",
+      "priority": "L",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Leave username field empty",
+        "Enter 'Pass1234' in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "",
+        "password": "Pass1234"
+      },
+      "expected": "Error message 'username is required' displayed. Login not performed.",
+      "risk_score": 22,
+      "coverage_ids": [
+        "COV-031"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-032",
+      "requirement_id": "REQ-002",
+      "title": "EP-valid password within range and digit",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'validuser' in the username field",
+        "Enter 'Passw0rd1' in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "validuser",
+        "password": "Passw0rd1"
+      },
+      "expected": "No error message about password format; if credentials invalid, error 'invalid credentials' displayed (password format validation passed).",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-032"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-033",
+      "requirement_id": "REQ-004",
+      "title": "EP-empty password",
+      "technique": "EP",
+      "priority": "L",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'user01' in the username field",
+        "Leave password field empty",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": ""
+      },
+      "expected": "Error message 'password is required' displayed. Login not performed.",
+      "risk_score": 22,
+      "coverage_ids": [
+        "COV-033"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-034",
+      "requirement_id": "REQ-002",
+      "title": "EP-password too short",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'validuser' in the username field",
+        "Enter 'Pass1' (5 characters, contains digit) in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "validuser",
+        "password": "Pass1"
+      },
+      "expected": "Error message indicating invalid password (e.g., 'Password must be at least 8 characters') displayed. Login not performed.",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-034"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-035",
+      "requirement_id": "REQ-002",
+      "title": "EP-password too long",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'validuser' in the username field",
+        "Enter '123456789012345678901234567890123' (33 characters, digits only) in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "validuser",
+        "password": "123456789012345678901234567890123"
+      },
+      "expected": "Error message indicating invalid password (e.g., 'Password must be at most 32 characters') displayed. Login not performed.",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-035"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-036",
+      "requirement_id": "REQ-002",
+      "title": "EP-password missing digit",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'validuser' in the username field",
+        "Enter 'Password' (8 characters, no digit) in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "validuser",
+        "password": "Password"
+      },
+      "expected": "Error message indicating invalid password (e.g., 'Password must contain at least one digit') displayed. Login not performed.",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-036"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-037",
+      "requirement_id": "REQ-005",
+      "title": "EP-valid credentials login success",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page; account not locked",
+      "steps": [
+        "Enter 'user01' in the username field",
+        "Enter 'Pass1234' in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Pass1234"
+      },
+      "expected": "Redirect to success page.",
+      "risk_score": 62,
+      "coverage_ids": [
+        "COV-037"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-038",
+      "requirement_id": "REQ-006",
+      "title": "EP-invalid credentials",
+      "technique": "EP",
+      "priority": "M",
+      "preconditions": "User is on the login page",
+      "steps": [
+        "Enter 'invaliduser' in the username field",
+        "Enter 'invalidpassword' in the password field",
+        "Click Login button"
+      ],
+      "test_data": {
+        "username": "invaliduser",
+        "password": "invalidpassword"
+      },
+      "expected": "Error message 'invalid credentials' displayed. Login denied.",
+      "risk_score": 54,
+      "coverage_ids": [
+        "COV-038"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-039",
+      "requirement_id": "REQ-007",
+      "title": "EP-less than 3 failed attempts no lock",
+      "technique": "EP",
+      "priority": "H",
+      "preconditions": "Account not locked. User is on the login page.",
+      "steps": [
+        "Attempt 1: Enter 'user01' in username and 'wrongpass' in password, click Login, observe 'invalid credentials' error.",
+        "Attempt 2: Enter 'user01' in username and 'wrongpass' in password, click Login, observe 'invalid credentials' error.",
+        "Attempt valid: Enter 'user01' in username and 'Pass1234' in password, click Login."
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Pass1234"
+      },
+      "expected": "After 2 failed attempts, login with valid credentials succeeds, redirect to success page.",
+      "risk_score": 87,
+      "coverage_ids": [
+        "COV-039"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-040",
+      "requirement_id": "REQ-007",
+      "title": "EP-exactly 3 failed attempts triggers lock",
+      "technique": "EP",
+      "priority": "H",
+      "preconditions": "Account not locked. User is on the login page.",
+      "steps": [
+        "Attempt 1: Enter 'user01' in username and 'wrongpass' in password, click Login, observe 'invalid credentials' error.",
+        "Attempt 2: Repeat with same invalid credentials, observe 'invalid credentials' error.",
+        "Attempt 3: Repeat with same invalid credentials, observe 'invalid credentials' error.",
+        "Attempt valid: Enter 'user01' in username and 'Pass1234' in password, click Login."
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Pass1234"
+      },
+      "expected": "After third failed attempt, account is locked. On the valid login attempt, error message indicating account is locked (e.g., 'Account locked due to too many failed attempts. Try again in 30 seconds.') is displayed. Redirect does not occur.",
+      "risk_score": 87,
+      "coverage_ids": [
+        "COV-040"
+      ],
+      "strategy_id": "STR-003",
+      "status": "active"
+    },
+    {
+      "id": "TC-001",
+      "requirement_id": "REQ-001",
+      "title": "BVA-username length 2 (min-1)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept username input",
+      "steps": [
+        "Enter 'ab' (2 characters) in the username field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "username": "ab"
+      },
+      "expected": "Rejected: username must be between 3 and 20 characters",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-001"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-002",
+      "requirement_id": "REQ-001",
+      "title": "BVA-username length 3 (min)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept username input",
+      "steps": [
+        "Enter 'usr' (3 characters) in the username field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "username": "usr"
+      },
+      "expected": "Accepted: username passes length validation",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-002"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-003",
+      "requirement_id": "REQ-001",
+      "title": "BVA-username length 4 (min+1)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept username input",
+      "steps": [
+        "Enter 'usra' (4 characters) in the username field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "username": "usra"
+      },
+      "expected": "Accepted: username passes length validation",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-003"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-004",
+      "requirement_id": "REQ-001",
+      "title": "BVA-username length 19 (max-1)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept username input",
+      "steps": [
+        "Enter a 19-character string in the username field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "username": "aaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": "Accepted: username passes length validation",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-004"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-005",
+      "requirement_id": "REQ-001",
+      "title": "BVA-username length 20 (max)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept username input",
+      "steps": [
+        "Enter a 20-character string in the username field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "username": "aaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": "Accepted: username passes length validation",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-005"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-006",
+      "requirement_id": "REQ-001",
+      "title": "BVA-username length 21 (max+1)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept username input",
+      "steps": [
+        "Enter a 21-character string in the username field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "username": "aaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": "Rejected: username must be between 3 and 20 characters",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-006"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-007",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password length 7 (min-1) with digit",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter '1bcdefg' (7 characters, contains digit) in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "1bcdefg"
+      },
+      "expected": "Rejected: password must be between 8 and 32 characters",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-007"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-008",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password length 8 (min) with digit",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter '1bcdefgh' (8 characters, contains digit) in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "1bcdefgh"
+      },
+      "expected": "Accepted: password passes length and digit validation",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-008"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-009",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password length 9 (min+1) with digit",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter '1bcdefghi' (9 characters, contains digit) in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "1bcdefghi"
+      },
+      "expected": "Accepted: password passes length and digit validation",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-009"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-010",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password length 31 (max-1) with digit",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter a 31-character string containing a digit in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "1abcdefghijklmnopqrstuvwxyzabcde"
+      },
+      "expected": "Accepted: password passes length and digit validation",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-010"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-011",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password length 32 (max) with digit",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter a 32-character string containing a digit in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "1abcdefghijklmnopqrstuvwxyzabcdef"
+      },
+      "expected": "Accepted: password passes length and digit validation",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-011"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-012",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password length 33 (max+1) with digit",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter a 33-character string containing a digit in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "1abcdefghijklmnopqrstuvwxyzabcdefg"
+      },
+      "expected": "Rejected: password must be between 8 and 32 characters",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-012"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-013",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password no digit (min boundary)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter 'abcdefgh' (8 characters, no digit) in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "abcdefgh"
+      },
+      "expected": "Rejected: password must contain at least one digit",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-013"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-014",
+      "requirement_id": "REQ-002",
+      "title": "BVA-password one digit (min boundary)",
+      "technique": "BVA",
+      "priority": "M",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Enter '1bcdefgh' (8 characters, contains one digit) in the password field",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": "1bcdefgh"
+      },
+      "expected": "Accepted: password meets digit requirement",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-014"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-015",
+      "requirement_id": "REQ-003",
+      "title": "BVA-empty username",
+      "technique": "BVA",
+      "priority": "L",
+      "preconditions": "System is ready to accept username input",
+      "steps": [
+        "Leave the username field empty",
+        "Submit the form"
+      ],
+      "test_data": {
+        "username": ""
+      },
+      "expected": "Rejected: error message 'username is required' displayed",
+      "risk_score": 22,
+      "coverage_ids": [
+        "COV-015"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-016",
+      "requirement_id": "REQ-004",
+      "title": "BVA-empty password",
+      "technique": "BVA",
+      "priority": "L",
+      "preconditions": "System is ready to accept password input",
+      "steps": [
+        "Leave the password field empty",
+        "Submit the form"
+      ],
+      "test_data": {
+        "password": ""
+      },
+      "expected": "Rejected: error message 'password is required' displayed",
+      "risk_score": 22,
+      "coverage_ids": [
+        "COV-016"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-017",
+      "requirement_id": "REQ-007",
+      "title": "BVA-failed attempts 2 (max-1)",
+      "technique": "BVA",
+      "priority": "H",
+      "preconditions": "Account is not locked; no recent failed attempts",
+      "steps": [
+        "Perform 2 consecutive failed login attempts for the same account",
+        "Attempt a 3rd login with valid credentials"
+      ],
+      "test_data": {
+        "failed_attempts": "2"
+      },
+      "expected": "No lockout; login is allowed on 3rd attempt",
+      "risk_score": 87,
+      "coverage_ids": [
+        "COV-017"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-018",
+      "requirement_id": "REQ-007",
+      "title": "BVA-failed attempts 3 (max)",
+      "technique": "BVA",
+      "priority": "H",
+      "preconditions": "Account is not locked; no recent failed attempts",
+      "steps": [
+        "Perform 3 consecutive failed login attempts for the same account"
+      ],
+      "test_data": {
+        "failed_attempts": "3"
+      },
+      "expected": "Account is locked for 30 seconds; further login attempts are blocked during lock period",
+      "risk_score": 87,
+      "coverage_ids": [
+        "COV-018"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-019",
+      "requirement_id": "REQ-007",
+      "title": "BVA-failed attempts 4 (max+1)",
+      "technique": "BVA",
+      "priority": "H",
+      "preconditions": "Account is locked after 3 consecutive failed attempts",
+      "steps": [
+        "Attempt a 4th login while account is locked"
+      ],
+      "test_data": {
+        "failed_attempts": "4"
+      },
+      "expected": "Rejected: error message indicating account is locked; login blocked",
+      "risk_score": 87,
+      "coverage_ids": [
+        "COV-019"
+      ],
+      "strategy_id": "STR-001",
+      "status": "active"
+    },
+    {
+      "id": "TC-020",
+      "requirement_id": "REQ-003",
+      "title": "DT-R1: Empty username shows error",
+      "technique": "DecisionTable",
+      "priority": "L",
+      "preconditions": "Login page loaded; account not locked",
+      "steps": [
+        "Leave username field empty",
+        "Enter any password (e.g., 'Pass1234')",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "",
+        "password": "Pass1234"
+      },
+      "expected": "A1: Error message 'username is required' displayed; login blocked",
+      "risk_score": 22,
+      "coverage_ids": [
+        "COV-020"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    },
+    {
+      "id": "TC-021",
+      "requirement_id": "REQ-001",
+      "title": "DT-R2: Username too short shows error",
+      "technique": "DecisionTable",
+      "priority": "M",
+      "preconditions": "Login page loaded; account not locked",
+      "steps": [
+        "Enter username 'ab' (2 characters)",
+        "Enter any password (e.g., 'Pass1234')",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "ab",
+        "password": "Pass1234"
+      },
+      "expected": "A2: Error message 'username must be 3-20 characters' displayed; login blocked",
+      "risk_score": 56,
+      "coverage_ids": [
+        "COV-021"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    },
+    {
+      "id": "TC-022",
+      "requirement_id": "REQ-004",
+      "title": "DT-R3: Empty password shows error",
+      "technique": "DecisionTable",
+      "priority": "L",
+      "preconditions": "Login page loaded; account not locked",
+      "steps": [
+        "Enter valid username (e.g., 'user01')",
+        "Leave password field empty",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": ""
+      },
+      "expected": "A3: Error message 'password is required' displayed; login blocked",
+      "risk_score": 22,
+      "coverage_ids": [
+        "COV-022"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    },
+    {
+      "id": "TC-023",
+      "requirement_id": "REQ-002",
+      "title": "DT-R4: Password too short shows error",
+      "technique": "DecisionTable",
+      "priority": "M",
+      "preconditions": "Login page loaded; account not locked",
+      "steps": [
+        "Enter valid username (e.g., 'user01')",
+        "Enter password 'Short1' (6 characters)",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Short1"
+      },
+      "expected": "A4: Error message 'password must be 8-32 characters' displayed; login blocked",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-023"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    },
+    {
+      "id": "TC-024",
+      "requirement_id": "REQ-002",
+      "title": "DT-R5: Password missing digit shows error",
+      "technique": "DecisionTable",
+      "priority": "M",
+      "preconditions": "Login page loaded; account not locked",
+      "steps": [
+        "Enter valid username (e.g., 'user01')",
+        "Enter password 'Password' (no digit)",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Password"
+      },
+      "expected": "A5: Error message 'password must contain at least one digit' displayed; login blocked",
+      "risk_score": 70,
+      "coverage_ids": [
+        "COV-024"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    },
+    {
+      "id": "TC-025",
+      "requirement_id": "REQ-007",
+      "title": "DT-R6: Account locked prevents login",
+      "technique": "DecisionTable",
+      "priority": "H",
+      "preconditions": "Three consecutive failed login attempts have occurred on account 'user01'; lock timer is active (less than 30 seconds since lock)",
+      "steps": [
+        "Enter correct credentials: username 'user01', password 'Pass1234'",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Pass1234"
+      },
+      "expected": "A8: Error message 'account locked, try again in 30 seconds' displayed; login blocked",
+      "risk_score": 87,
+      "coverage_ids": [
+        "COV-025"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    },
+    {
+      "id": "TC-026",
+      "requirement_id": "REQ-006",
+      "title": "DT-R7: Invalid credentials increments counter and locks account on third failure",
+      "technique": "DecisionTable",
+      "priority": "M",
+      "preconditions": "Account 'user01' has exactly 2 previous failed attempts; account is not locked",
+      "steps": [
+        "Enter invalid credentials: username 'user01', password 'Wrong12' (incorrect password)",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Wrong12"
+      },
+      "expected": "A7: Display 'invalid credentials'; failed counter increments to 3; account gets locked for 30 seconds; login blocked",
+      "risk_score": 54,
+      "coverage_ids": [
+        "COV-026"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    },
+    {
+      "id": "TC-027",
+      "requirement_id": "REQ-005",
+      "title": "DT-R8: Valid login returns success",
+      "technique": "DecisionTable",
+      "priority": "M",
+      "preconditions": "Account 'user01' is not locked; failed counter less than 3",
+      "steps": [
+        "Enter correct credentials: username 'user01', password 'Pass1234'",
+        "Click Login"
+      ],
+      "test_data": {
+        "username": "user01",
+        "password": "Pass1234"
+      },
+      "expected": "A6: User authenticated; redirect to success page; failed counter reset to 0",
+      "risk_score": 62,
+      "coverage_ids": [
+        "COV-027"
+      ],
+      "strategy_id": "STR-002",
+      "status": "active"
+    }
+  ],
+  "trace_links": [
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-028",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-028"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-029",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-029"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-030",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-030"
+    },
+    {
+      "requirement_id": "REQ-003",
+      "coverage_id": "COV-031",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-031"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-032",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-032"
+    },
+    {
+      "requirement_id": "REQ-004",
+      "coverage_id": "COV-033",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-033"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-034",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-034"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-035",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-035"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-036",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-036"
+    },
+    {
+      "requirement_id": "REQ-005",
+      "coverage_id": "COV-037",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-037"
+    },
+    {
+      "requirement_id": "REQ-006",
+      "coverage_id": "COV-038",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-038"
+    },
+    {
+      "requirement_id": "REQ-007",
+      "coverage_id": "COV-039",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-039"
+    },
+    {
+      "requirement_id": "REQ-007",
+      "coverage_id": "COV-040",
+      "strategy_id": "STR-003",
+      "test_case_id": "TC-040"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-001",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-001"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-002",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-002"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-003",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-003"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-004",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-004"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-005",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-005"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-006",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-006"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-007",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-007"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-008",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-008"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-009",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-009"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-010",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-010"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-011",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-011"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-012",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-012"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-013",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-013"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-014",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-014"
+    },
+    {
+      "requirement_id": "REQ-003",
+      "coverage_id": "COV-015",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-015"
+    },
+    {
+      "requirement_id": "REQ-004",
+      "coverage_id": "COV-016",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-016"
+    },
+    {
+      "requirement_id": "REQ-007",
+      "coverage_id": "COV-017",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-017"
+    },
+    {
+      "requirement_id": "REQ-007",
+      "coverage_id": "COV-018",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-018"
+    },
+    {
+      "requirement_id": "REQ-007",
+      "coverage_id": "COV-019",
+      "strategy_id": "STR-001",
+      "test_case_id": "TC-019"
+    },
+    {
+      "requirement_id": "REQ-003",
+      "coverage_id": "COV-020",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-020"
+    },
+    {
+      "requirement_id": "REQ-001",
+      "coverage_id": "COV-021",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-021"
+    },
+    {
+      "requirement_id": "REQ-004",
+      "coverage_id": "COV-022",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-022"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-023",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-023"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "coverage_id": "COV-024",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-024"
+    },
+    {
+      "requirement_id": "REQ-007",
+      "coverage_id": "COV-025",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-025"
+    },
+    {
+      "requirement_id": "REQ-006",
+      "coverage_id": "COV-026",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-026"
+    },
+    {
+      "requirement_id": "REQ-005",
+      "coverage_id": "COV-027",
+      "strategy_id": "STR-002",
+      "test_case_id": "TC-027"
+    }
+  ],
+  "review_events": [],
+  "state_diagram": null,
+  "optimized_case_ids": [],
+  "whitebox_result": null
+}

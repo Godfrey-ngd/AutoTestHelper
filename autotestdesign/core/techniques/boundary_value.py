@@ -45,15 +45,32 @@ def _fallback(
             bounds = [("field", 1, 10)]
         for field, lo, hi in bounds:
             cases = [
-                (f"{field} min-1", lo - 1, "invalid below min"),
-                (f"{field} min", lo, "valid at min"),
-                (f"{field} min+1", lo + 1, "valid above min"),
-                (f"{field} max-1", hi - 1, "valid below max"),
-                (f"{field} max", hi, "valid at max"),
-                (f"{field} max+1", hi + 1, "invalid above max"),
+                (f"{field} min-1", lo - 1, "invalid"),
+                (f"{field} min", lo, "valid"),
+                (f"{field} min+1", lo + 1, "valid"),
+                (f"{field} max-1", hi - 1, "valid"),
+                (f"{field} max", hi, "valid"),
+                (f"{field} max+1", hi + 1, "invalid"),
             ]
-            for title, length, note in cases:
+            for title, length, validity in cases:
                 val = "x" * max(0, length) if length > 0 else ""
+                if field == "username":
+                    test_data = {"username": val or "", "password": "Pass1234"}
+                    if validity == "valid":
+                        expected = "redirect to /success" if val else "username is required"
+                    elif val == "":
+                        expected = "username is required"
+                    else:
+                        expected = "invalid username"
+                elif field == "password":
+                    test_data = {"username": "user01", "password": val or ""}
+                    if val == "":
+                        expected = "password is required"
+                    else:
+                        expected = "invalid password"
+                else:
+                    test_data = {field: val or ""}
+                    expected = f"{validity} {field}"
                 cov = CoverageItem(
                     requirement_id=req.id,
                     item_type="boundary",
@@ -69,8 +86,8 @@ def _fallback(
                         priority=priority,
                         preconditions="User on login page",
                         steps=[f"Enter {field} with length {length}", "Submit"],
-                        test_data={field: val or "(empty)"},
-                        expected=note,
+                        test_data=test_data,
+                        expected=expected,
                         risk_score=score,
                         coverage_ids=[cov.id],
                         strategy_id=strategy.id,

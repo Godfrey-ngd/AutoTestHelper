@@ -1,0 +1,33 @@
+{
+  "sut": {
+    "name": "Login Module",
+    "module": "target-app.app",
+    "app_var": "app"
+  },
+  "base_url": "http://127.0.0.1:5000",
+  "reset_endpoint": "/reset",
+  "endpoints": {
+    "login": {
+      "method": "POST",
+      "path": "/",
+      "params": ["username", "password"]
+    }
+  },
+  "default_endpoint": "login",
+  "params_defaults": {
+    "username": "user01",
+    "password": "Pass1234"
+  },
+  "assertion_rules": [
+    {
+      "match": "redirect|302|welcome|/success|success page",
+      "use": "redirect_or_text"
+    },
+    {
+      "match": "locked|lock|Account locked",
+      "use": "text_contains_fuzzy",
+      "repeat": 3
+    }
+  ],
+  "default_assertion": "text_contains_fuzzy"
+}

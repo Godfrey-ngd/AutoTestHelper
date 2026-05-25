@@ -1,0 +1,2 @@
+test_case_id,requirement_id,title,technique,priority,risk_score,preconditions,steps,test_data,expected,coverage_ids
+TC-001,REQ-001,Username too short (2 chars),BVA,H,85,Login page is accessible,"Open login page | Enter username 'ab' | Enter password 'Pass1234' | Click Login","{""username"":""ab"",""password"":""Pass1234""}",invalid username,COV-001

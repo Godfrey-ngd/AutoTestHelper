@@ -27,26 +27,27 @@ def _fallback(
         text = req.raw_text.lower()
         priority = risk_map[req.id].priority if req.id in risk_map else Priority.MEDIUM
         score = risk_map[req.id].score if req.id in risk_map else 50
-        classes = []
+        classes: list[tuple[str, dict[str, str], str]] = []
         if "username" in text or "用户" in req.raw_text:
             classes = [
-                ("valid", "user01", "Login proceeds or validation passes"),
-                ("empty", "", "Error: username required"),
-                ("too_short", "ab", "Error: username length invalid"),
-                ("too_long", "a" * 21, "Error: username length invalid"),
+                ("valid", {"username": "user01", "password": "Pass1234"}, "redirect to /success"),
+                ("empty", {"username": "", "password": "Pass1234"}, "username is required"),
+                ("too_short", {"username": "ab", "password": "Pass1234"}, "invalid username"),
+                ("too_long", {"username": "a" * 21, "password": "Pass1234"}, "invalid username"),
             ]
         elif "password" in text or "密码" in req.raw_text:
             classes = [
-                ("valid", "Pass1234", "Password accepted"),
-                ("no_digit", "Password", "Error: password must contain digit"),
-                ("empty", "", "Error: password required"),
+                ("valid", {"username": "user01", "password": "Pass1234"}, "redirect to /success"),
+                ("no_digit", {"username": "user01", "password": "Password"}, "invalid password"),
+                ("empty", {"username": "user01", "password": ""}, "password is required"),
+                ("too_short", {"username": "user01", "password": "short"}, "invalid password"),
             ]
         else:
             classes = [
-                ("valid", "sample", "Expected success path"),
-                ("invalid", "invalid_sample", "Expected error path"),
+                ("valid", {"username": "valid_input", "password": "valid_input"}, "success"),
+                ("invalid", {"username": "", "password": ""}, "error"),
             ]
-        for cls_name, value, expected in classes:
+        for cls_name, test_data, expected in classes:
             cov = CoverageItem(
                 requirement_id=req.id,
                 item_type="equivalence_class",
@@ -63,7 +64,7 @@ def _fallback(
                     priority=priority,
                     preconditions="User on login page",
                     steps=["Enter test data", "Submit login form"],
-                    test_data={"value": value},
+                    test_data=test_data,
                     expected=expected,
                     risk_score=score,
                     coverage_ids=[cov.id],

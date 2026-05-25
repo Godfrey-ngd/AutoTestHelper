@@ -24,12 +24,12 @@ def _fallback(
         rationale="Decision table for login condition combinations",
     )
     rules = [
-        ("empty username", {"username": "", "password": "Pass1234"}, "Error: username required"),
-        ("empty password", {"username": "user01", "password": ""}, "Error: password required"),
-        ("invalid username format", {"username": "ab", "password": "Pass1234"}, "Error: invalid username"),
-        ("invalid password format", {"username": "user01", "password": "short"}, "Error: invalid password"),
-        ("valid credentials", {"username": "user01", "password": "Pass1234"}, "Redirect to success page"),
-        ("wrong password", {"username": "user01", "password": "Wrong999"}, "Error: invalid credentials"),
+        ("empty username", {"username": "", "password": "Pass1234"}, "username is required"),
+        ("empty password", {"username": "user01", "password": ""}, "password is required"),
+        ("invalid username format", {"username": "ab", "password": "Pass1234"}, "invalid username"),
+        ("invalid password format", {"username": "user01", "password": "short"}, "invalid password"),
+        ("valid credentials", {"username": "user01", "password": "Pass1234"}, "redirect to /success"),
+        ("wrong password", {"username": "user01", "password": "Wrong999"}, "invalid credentials"),
     ]
     req = requirements[0] if requirements else None
     if not req:
