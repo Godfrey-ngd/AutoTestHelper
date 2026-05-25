@@ -76,10 +76,7 @@ def parse_state_machine_mermaid(mermaid: str) -> StateMachine | None:
         has_initial = tr["source"] == "[*]"
         has_final = tr["target"] == "[*]"
         if has_initial:
-            if sm.initial_state:
-                tr["source"] = sm.initial_state.id
-            else:
-                continue
+            continue
         if has_final:
             # Mark final states
             for s in sm.states:
