@@ -939,6 +939,193 @@ def tab_improve(project: Project) -> Project:
     return project
 
 
+def tab_whitebox(project: Project) -> Project:
+    st.subheader("White-Box Testing (FR 4.0)")
+
+    from autotestdesign.core.whitebox import (
+        CRITERIA_MAP,
+        detect_and_parse,
+        derive_control_flow_graph,
+        derive_state_machine,
+        optimize_result,
+        run_coverage,
+    )
+    from autotestdesign.core.whitebox.models import ControlFlowGraph, StateMachine
+
+    col_left, col_right = st.columns([2, 3])
+
+    with col_left:
+        st.markdown("### Model Definition")
+        model_type = st.radio(
+            "Model type",
+            ["State Machine", "Control Flow Graph"],
+            key="wb_model_type",
+            horizontal=True,
+        )
+        input_mode = st.radio(
+            "Input mode",
+            ["Manual (Mermaid/JSON)", "LLM Derive from Requirements"],
+            key="wb_input_mode",
+            horizontal=True,
+        )
+
+        model_text = ""
+        model: StateMachine | ControlFlowGraph | None = None
+
+        if input_mode.startswith("Manual"):
+            model_text = st.text_area(
+                "Paste Mermaid or JSON model definition",
+                height=250,
+                key="wb_model_text",
+                placeholder="stateDiagram-v2\n    [*] --> Idle\n    Idle --> Active: start\n    Active --> [*]: stop",
+            )
+            if model_text.strip():
+                model = detect_and_parse(model_text.strip())
+                if model:
+                    st.success(
+                        f"Parsed: {type(model).__name__} — "
+                        f"{len(model.states if isinstance(model, StateMachine) else model.nodes)} nodes, "
+                        f"{len(model.transitions if isinstance(model, StateMachine) else model.edges)} edges"
+                    )
+                else:
+                    st.error("Could not parse model. Check syntax.")
+        else:
+            if st.button("Derive from Requirements", key="wb_derive_btn"):
+                if not project.requirements:
+                    st.warning("No requirements found. Import requirements first.")
+                else:
+                    with st.spinner("LLM is deriving model from requirements..."):
+                        if model_type == "State Machine":
+                            model = derive_state_machine(project.requirements)
+                        else:
+                            model = derive_control_flow_graph(project.requirements)
+                    if model:
+                        st.success(
+                            f"Derived {type(model).__name__} with "
+                            f"{len(model.states if isinstance(model, StateMachine) else model.nodes)} nodes"
+                        )
+                        st.session_state["wb_derived_model"] = model
+                        st.json(model.model_dump())
+                    else:
+                        st.error("LLM derivation failed. Check API key or try manual input.")
+
+            if "wb_derived_model" in st.session_state:
+                model = st.session_state["wb_derived_model"]
+
+        st.markdown("### Coverage Criteria")
+        is_sm = model_type == "State Machine"
+        sm_criteria = ["state", "transition"]
+        cfg_criteria = ["statement", "branch", "path", "condition", "mcdc"]
+        available = sm_criteria if is_sm else cfg_criteria
+
+        selected_criteria = st.multiselect(
+            "Select coverage criteria",
+            available,
+            default=available[:3],
+            key="wb_criteria",
+        )
+
+        optimize = st.checkbox("Apply optimization (greedy + postman)", value=True, key="wb_optimize")
+
+        if st.button("Generate Coverage Sequences", key="wb_generate_btn", type="primary"):
+            if model is None:
+                st.error("No model defined. Provide a model first.")
+            elif not selected_criteria:
+                st.error("Select at least one coverage criterion.")
+            else:
+                with st.spinner("Generating coverage sequences..."):
+                    results = run_coverage(model, selected_criteria)
+                    sm_for_opt = model if isinstance(model, StateMachine) else None
+                    if optimize:
+                        results = [optimize_result(r, sm_for_opt) for r in results]
+                    st.session_state["wb_results"] = results
+                    st.session_state["wb_model"] = model
+
+    with col_right:
+        st.markdown("### Results")
+        results = st.session_state.get("wb_results")
+        model_stored = st.session_state.get("wb_model")
+
+        if results:
+            for i, result in enumerate(results):
+                with st.expander(
+                    f"{result.model_type} — {result.coverage_pct:.0f}% coverage "
+                    f"({sum(1 for t in result.coverage_targets if t.covered)}/"
+                    f"{len(result.coverage_targets)} targets)",
+                    expanded=i == 0,
+                ):
+                    st.markdown("**Coverage Targets:**")
+                    for t in result.coverage_targets:
+                        st.text(f"{'[OK]' if t.covered else '[  ]'} {t.target_type}: {t.description}")
+
+                    st.markdown("**Test Sequences:**")
+                    for j, seq in enumerate(result.test_sequences):
+                        path_str = " -> ".join(seq)
+                        st.text(f"Seq {j + 1}: {path_str}")
+
+            if st.button("Add to Test Suite", key="wb_add_to_suite"):
+                _add_whitebox_results(project, results, model_stored)
+                _save_project(project)
+                st.success(
+                    f"Added {sum(len(r.test_sequences) for r in results)} "
+                    "white-box test cases to the suite"
+                )
+                st.rerun()
+
+        # Render diagram if available
+        if model_stored:
+            if isinstance(model_stored, StateMachine):
+                mermaid_lines = ["stateDiagram-v2"]
+                for t in model_stored.transitions:
+                    mermaid_lines.append(f"    {t.source} --> {t.target}: {t.trigger}")
+                st.markdown("### Model Diagram")
+                st.code("\n".join(mermaid_lines), language="mermaid")
+        elif project.state_diagram:
+            st.markdown("### Model Diagram")
+            st.code(project.state_diagram, language="mermaid")
+
+    return project
+
+
+def _add_whitebox_results(project: Project, results: list, model) -> None:
+    """Add whitebox coverage results as TestCases to the project."""
+    from autotestdesign.core.whitebox.models import WhiteboxResult
+    from autotestdesign.core.pipeline import _rebuild_trace_links
+
+    first_req = project.requirements[0].id if project.requirements else ""
+    for result in results:
+        for i, seq in enumerate(result.test_sequences):
+            path_desc = " -> ".join(seq)
+            technique = (
+                "StateTransition"
+                if result.model_type == "state_machine"
+                else "ControlFlowPath"
+            )
+            project.test_cases.append(
+                TestCase(
+                    title=f"WB-{technique}-{i + 1}: {path_desc[:60]}",
+                    requirement_id=first_req,
+                    technique=technique,
+                    preconditions=seq[0] if seq else "",
+                    steps=[f"Follow path: {path_desc}"],
+                    expected=f"Reach: {seq[-1]}" if seq else "",
+                )
+            )
+
+    if results:
+        combined = WhiteboxResult()
+        combined.model_type = results[0].model_type
+        for r in results:
+            combined.coverage_targets.extend(r.coverage_targets)
+            combined.test_sequences.extend(r.test_sequences)
+        total = len(combined.coverage_targets)
+        covered = sum(1 for t in combined.coverage_targets if t.covered)
+        combined.coverage_pct = (covered / total * 100) if total else 100
+        project.whitebox_result = combined.model_dump()
+
+    _rebuild_trace_links(project)
+
+
 def tab_export(project: Project) -> None:
     st.subheader("8. Export (FR 6.0)")
     c1, c2 = st.columns(2)
@@ -1013,6 +1200,7 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
             "Coverage",
             "Strategy",
             "Test Cases",
+            "White-Box",
             "Traceability",
             "Improvement",
             "Export",
@@ -1024,6 +1212,7 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
         tab_coverage,
         tab_strategy,
         tab_cases,
+        tab_whitebox,
         tab_trace,
         tab_improve,
         tab_export,
