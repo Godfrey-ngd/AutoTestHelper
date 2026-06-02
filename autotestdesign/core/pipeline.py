@@ -43,12 +43,31 @@ def run_risk(project: Project) -> tuple[Project, float]:
 
 def run_techniques(project: Project) -> tuple[Project, float]:
     t0 = time.perf_counter()
+    assignments = project.strategy_assignments
+    if not assignments:
+        from autotestdesign.core.strategy.recommender import auto_recommend
+        from autotestdesign.models.schemas import StrategyAssignment
+
+        recommendations = auto_recommend(project.requirements, project.risks)
+        for rec in recommendations:
+            for tech in rec["recommended_techniques"]:
+                project.strategy_assignments.append(
+                    StrategyAssignment(
+                        requirement_id=rec["requirement_id"], technique=tech
+                    )
+                )
+        assignments = project.strategy_assignments
+
     result: TechniqueResult = generate_all_techniques(
-        project.requirements, project.risks
+        project.requirements,
+        project.risks,
+        assignments=assignments,
+        params=project.technique_params,
     )
     project.test_cases = result.test_cases
     project.coverage_items = result.coverage_items
     project.strategies = result.strategies
+    _apply_suite_assignments(project)
     _rebuild_trace_links(project)
     return project, (time.perf_counter() - t0) * 1000
 
@@ -95,12 +114,26 @@ def regenerate_for_requirement(
     project.coverage_items = [
         c for c in project.coverage_items if c.requirement_id != requirement_id
     ]
-    for gen in (
-        equivalence_partitioning.generate,
-        boundary_value.generate,
-        decision_table.generate,
-    ):
-        res = gen(reqs, risk_map, fb_payload)
+    tech_map = {
+        "EP": equivalence_partitioning.generate,
+        "BVA": boundary_value.generate,
+        "DecisionTable": decision_table.generate,
+    }
+    for tech, gen in tech_map.items():
+        # Check if this technique is enabled for the requirement
+        assignment = next(
+            (a for a in project.strategy_assignments if a.requirement_id == requirement_id and a.technique == tech),
+            None,
+        )
+        if assignment is not None and not assignment.enabled:
+            continue
+        kwargs = {}
+        if tech == "BVA":
+            kwargs["offset"] = project.technique_params.bva_offset
+        elif tech == "EP":
+            kwargs["valid_partitions"] = project.technique_params.ep_valid_partitions
+            kwargs["invalid_partitions"] = project.technique_params.ep_invalid_partitions
+        res = gen(reqs, risk_map, fb_payload, **kwargs)
         project.test_cases.extend(res.test_cases)
         project.coverage_items.extend(res.coverage_items)
         project.strategies.extend(res.strategies)
@@ -182,6 +215,22 @@ def add_whitebox(
 
     _rebuild_trace_links(project)
     return project
+
+
+def _apply_suite_assignments(project: Project) -> None:
+    """Sync suite_id and tags to test cases based on suite assignments."""
+    suite_map: dict[str, str] = {}  # requirement_id -> suite_name
+    suite_ids: dict[str, str] = {}  # requirement_id -> suite_id
+    for suite in project.suites:
+        for rid in suite.requirement_ids:
+            suite_map[rid] = suite.name
+            suite_ids[rid] = suite.id
+    for tc in project.test_cases:
+        if tc.requirement_id in suite_ids:
+            tc.suite_id = suite_ids[tc.requirement_id]
+            tag = f"#{suite_map[tc.requirement_id].lower().replace(' ', '_')}"
+            if tag not in tc.tags:
+                tc.tags.append(tag)
 
 
 def _rebuild_trace_links(project: Project) -> None:
