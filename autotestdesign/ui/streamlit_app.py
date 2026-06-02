@@ -714,7 +714,11 @@ def tab_planning(project: Project) -> Project:
                 column_config={
                     "Priority": st.column_config.NumberColumn("Priority", width="small"),
                     "Req ID": st.column_config.TextColumn("Req ID", width="small"),
-                    "Risk": st.column_config.TextColumn("Risk", width="small"),
+                    "Risk": st.column_config.SelectboxColumn(
+                        "Risk",
+                        options=["H", "M", "L"],
+                        width="small",
+                    ),
                     "Test Level": st.column_config.SelectboxColumn(
                         "Test Level",
                         options=["comprehensive", "standard", "smoke"],
