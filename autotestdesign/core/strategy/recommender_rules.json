@@ -1,0 +1,25 @@
+{
+  "rules": [
+    {
+      "risk": "H",
+      "techniques": ["DecisionTable", "BVA", "EP"],
+      "reason": "High-risk requirements need combinatorial coverage (DecisionTable for condition combinations, BVA for boundaries, EP for input partitioning)"
+    },
+    {
+      "risk": "M",
+      "techniques": ["EP", "BVA"],
+      "reason": "Medium-risk requirements focus on input domain coverage with equivalence partitioning and boundary value analysis"
+    },
+    {
+      "risk": "L",
+      "techniques": ["EP"],
+      "reason": "Low-risk requirements covered by equivalence partitioning to verify basic input handling"
+    }
+  ],
+  "technique_metadata": {
+    "EP": {"name": "Equivalence Partitioning", "icon": "⊞"},
+    "BVA": {"name": "Boundary Value Analysis", "icon": "⇅"},
+    "DecisionTable": {"name": "Decision Table", "icon": "⊡"},
+    "StateTransition": {"name": "State Transition", "icon": "⇄"}
+  }
+}
