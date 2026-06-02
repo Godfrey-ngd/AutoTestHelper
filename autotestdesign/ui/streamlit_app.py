@@ -37,11 +37,26 @@ from autotestdesign.models.schemas import (
     Project,
     Requirement,
     RiskWeights,
+    StrategyAssignment,
     StructuredFields,
+    TechniqueParameter,
     TestCase,
     TestStrategy,
+    TestSuite,
     seed_ids_from_project,
 )
+from autotestdesign.core.strategy import (
+    auto_recommend,
+    estimate_case_count,
+    estimate_coverage,
+    get_technique_metadata,
+)
+from autotestdesign.core.strategy.suite_manager import (
+    assign_to_suite,
+    create_suite,
+    delete_suite,
+)
+from autotestdesign.ui.components.technique_selector import render_technique_matrix
 from autotestdesign.storage.project_store import ProjectStore
 
 SAMPLE_REQ = """REQ-001,The system shall accept username between 3 and 20 characters
@@ -580,6 +595,39 @@ def tab_coverage(project: Project) -> Project:
             ms = st.session_state["metrics"].get("techniques_ms", 0)
             st.success(f"Generated {len(project.test_cases)} test case(s) ({ms:.0f} ms)")
 
+    with st.expander("Add Coverage Item", expanded=False):
+        cov_type = st.selectbox(
+            "Type",
+            ["functional", "security", "boundary", "performance", "usability"],
+            key="cov_add_type",
+        )
+        req_opts = {
+            r.id: f"{r.id}: {r.title or r.raw_text[:40]}"
+            for r in project.requirements
+        }
+        cov_req = st.selectbox(
+            "Requirement",
+            list(req_opts.keys()),
+            format_func=lambda x: req_opts[x],
+            key="cov_add_req",
+        )
+        cov_desc = st.text_input(
+            "Description",
+            placeholder="e.g. SQL injection in username field",
+            key="cov_add_desc",
+        )
+        if st.button("Add Coverage Item", type="secondary") and cov_desc.strip():
+            project.coverage_items.append(
+                CoverageItem(
+                    requirement_id=cov_req,
+                    item_type=cov_type,
+                    description=cov_desc.strip(),
+                )
+            )
+            _save_project(project)
+            st.success("Coverage item added")
+            st.rerun()
+
     if project.coverage_items:
         df = pd.DataFrame([c.model_dump() for c in project.coverage_items])
         edited = st.data_editor(df, num_rows="dynamic", key="cov_editor")
@@ -613,61 +661,334 @@ def tab_coverage(project: Project) -> Project:
 
 
 def tab_strategy(project: Project) -> Project:
-    st.subheader("4. Test Strategy")
-    if not project.strategies and st.button("Create default strategies"):
-        project.strategies = [
-            TestStrategy(
-                technique="EP",
-                rationale="Equivalence partitioning for input classes",
-                requirement_ids=[r.id for r in project.requirements],
-            ),
-            TestStrategy(
-                technique="BVA",
-                rationale="Boundary values on length constraints",
-                requirement_ids=[r.id for r in project.requirements],
-            ),
-            TestStrategy(
-                technique="DecisionTable",
-                rationale="Condition combinations for login",
-                requirement_ids=[r.id for r in project.requirements],
-            ),
-        ]
-        _save_project(project)
-    if project.strategies:
-        df = pd.DataFrame(
-            [
-                {
-                    "id": s.id,
-                    "technique": s.technique,
-                    "rationale": s.rationale,
-                    "requirements": ",".join(s.requirement_ids),
-                }
-                for s in project.strategies
-            ]
-        )
-        edited = st.data_editor(df, num_rows="dynamic", key="str_editor")
-        if st.button("Save strategy edits", type="secondary"):
-            with st.spinner("Saving strategies…"):
-                new_s = []
-                for _, row in edited.iterrows():
-                    new_s.append(
-                        TestStrategy(
-                            id=str(row.get("id", TestStrategy().id)),
-                            technique=str(row.get("technique", "")),
-                            rationale=str(row.get("rationale", "")),
-                            requirement_ids=str(row.get("requirements", "")).split(",")
-                            if row.get("requirements")
-                            else [],
+    st.subheader("Strategy Configuration")
+
+    if not project.requirements:
+        st.info("Import requirements on the Import tab first.")
+        return project
+
+    if not project.risks:
+        st.warning("Risk assessment not yet run. Run it first or auto-recommend will use defaults.")
+        if st.button("Run Risk Assessment Now", type="secondary"):
+            def _do_risk():
+                p, ms = run_risk(project)
+                st.session_state["metrics"]["risk_ms"] = ms
+                _save_project(p)
+                return p
+
+            out = _run_with_feedback("Risk assessment", _do_risk)
+            if out is not None:
+                project = out
+                st.rerun()
+
+    col_left, col_right = st.columns([3, 2])
+
+    with col_left:
+        st.markdown("### Technique Mapping")
+        all_techniques = ["EP", "BVA", "DecisionTable", "StateTransition"]
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Auto-Recommend Techniques", type="primary", use_container_width=True):
+                recommendations = auto_recommend(project.requirements, project.risks)
+                project.strategy_assignments = []
+                for rec in recommendations:
+                    for tech in rec["recommended_techniques"]:
+                        project.strategy_assignments.append(
+                            StrategyAssignment(
+                                requirement_id=rec["requirement_id"], technique=tech
+                            )
                         )
-                    )
-                project.strategies = new_s
                 _save_project(project)
-            st.toast("Strategies saved", icon="✅")
+                st.rerun()
+        with c2:
+            if st.button("Reset All", type="secondary", use_container_width=True):
+                project.strategy_assignments = []
+                _save_project(project)
+                st.rerun()
+
+        st.caption(
+            "Check the techniques to apply for each requirement. "
+            "Risk: H=High (red), M=Medium (yellow), L=Low (green)."
+        )
+
+        assignments = render_technique_matrix(
+            project.requirements,
+            project.risks,
+            project.strategy_assignments,
+            all_techniques,
+        )
+        if assignments != project.strategy_assignments:
+            project.strategy_assignments = assignments
+            _save_project(project)
+
+        st.divider()
+        st.markdown("### Technique Parameters")
+        tp = project.technique_params
+
+        params_col1, params_col2 = st.columns(2)
+        with params_col1:
+            st.caption("**BVA: Boundary Offset**")
+            new_offset = st.slider(
+                "Offset",
+                1,
+                5,
+                tp.bva_offset,
+                help="+/-1 = 4 cases/field, +/-2 = 6, +/-3 = 8, +/-4 = 10, +/-5 = 12",
+                key="bva_offset_slider",
+            )
+        with params_col2:
+            st.caption("**EP: Partitions**")
+            new_vp = st.slider(
+                "Valid partitions", 1, 5, tp.ep_valid_partitions, key="ep_vp_slider"
+            )
+            new_ip = st.slider(
+                "Invalid partitions",
+                1,
+                5,
+                tp.ep_invalid_partitions,
+                key="ep_ip_slider",
+            )
+
+        if (
+            new_offset != tp.bva_offset
+            or new_vp != tp.ep_valid_partitions
+            or new_ip != tp.ep_invalid_partitions
+        ):
+            project.technique_params = TechniqueParameter(
+                bva_offset=new_offset,
+                ep_valid_partitions=new_vp,
+                ep_invalid_partitions=new_ip,
+            )
+            _save_project(project)
+
+        st.divider()
+        st.markdown("### Suite Quick-Assign")
+        if project.suites:
+            suite_names = [s.name for s in project.suites]
+            suite_options = ["(none)"] + suite_names
+            sel_suite_name = st.selectbox(
+                "Target suite", suite_options, key="quick_suite"
+            )
+            req_options = {
+                r.id: f"{r.id}: {r.title or r.raw_text[:40]}"
+                for r in project.requirements
+            }
+            sel_reqs = st.multiselect(
+                "Select requirements to assign",
+                list(req_options.keys()),
+                format_func=lambda x: req_options[x],
+                key="quick_assign_reqs",
+            )
+            if (
+                st.button("Assign to Suite", type="secondary")
+                and sel_suite_name != "(none)"
+                and sel_reqs
+            ):
+                suite = next(
+                    (s for s in project.suites if s.name == sel_suite_name), None
+                )
+                if suite:
+                    assign_to_suite(project, suite.id, sel_reqs)
+                    _save_project(project)
+                    st.success(
+                        f"Assigned {len(sel_reqs)} requirement(s) to {sel_suite_name}"
+                    )
+                    st.rerun()
+        else:
+            st.caption("No suites created yet. Create suites in the Suites tab.")
+
+        st.divider()
+        if st.button(
+            "Apply Strategy & Generate Test Cases",
+            type="primary",
+            use_container_width=True,
+        ):
+            enabled_count = sum(
+                1 for a in project.strategy_assignments if a.enabled
+            )
+            if enabled_count == 0:
+                st.warning(
+                    "No techniques enabled. Use Auto-Recommend or check techniques manually."
+                )
+            else:
+
+                def _gen():
+                    p, ms = run_techniques(project)
+                    st.session_state["metrics"]["techniques_ms"] = ms
+                    _save_project(p)
+                    return p
+
+                out = _run_with_feedback(
+                    "Generate test cases from strategy",
+                    _gen,
+                    success=f"Generated test cases complete",
+                )
+                if out is not None:
+                    project = out
+                    st.success(
+                        f"Generated {len(project.test_cases)} test case(s) "
+                        f"({st.session_state['metrics'].get('techniques_ms', 0):.0f} ms)"
+                    )
+
+    with col_right:
+        st.markdown("### Live Preview")
+        assignments_for_preview = project.strategy_assignments
+
+        if assignments_for_preview:
+            estimate = estimate_case_count(
+                project.requirements,
+                assignments_for_preview,
+                project.technique_params,
+            )
+            st.markdown(
+                f"<div style='background:#f0f7ff;border-radius:8px;padding:16px;text-align:center'>"
+                f"<p style='margin:0;font-size:14px;color:#666'>Estimated Test Cases</p>"
+                f"<p style='margin:0;font-size:48px;font-weight:bold;color:#1976d2'>{estimate['total']}</p>"
+                f"<p style='margin:0;font-size:12px;color:#666'>from {len(project.requirements)} requirement(s)</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            st.markdown("**Breakdown by Technique**")
+            breakdown = estimate.get("by_technique", {})
+            for tech, count in sorted(breakdown.items()):
+                metadata = get_technique_metadata().get(tech, {})
+                icon = metadata.get("icon", "")
+                name = metadata.get("name", tech)
+                st.text(f"{icon} {name}: {count}")
+
+            st.markdown("**Coverage Estimation**")
+            risk_data = [
+                {
+                    "requirement_id": r.requirement_id,
+                    "priority": r.priority.value,
+                }
+                for r in project.risks
+            ]
+            cov = estimate_coverage(
+                project.requirements, assignments_for_preview, risk_data
+            )
+            for level in ["H", "M", "L"]:
+                if level in cov:
+                    info = cov[level]
+                    label = {"H": "High", "M": "Medium", "L": "Low"}[level]
+                    st.markdown(
+                        f"**{label}-risk** ({info['covered']}/{info['total']}): "
+                        f"{info['percentage']}%"
+                    )
+                    st.progress(info["percentage"] / 100)
+        else:
+            st.info(
+                "Click 'Auto-Recommend Techniques' or manually enable techniques to see preview."
+            )
+
+    return project
+
+
+def tab_suites(project: Project) -> Project:
+    st.subheader("Test Suites")
+
+    with st.expander("Create Suite", expanded=not project.suites):
+        suite_name = st.text_input(
+            "Suite name",
+            placeholder="e.g. Security_Suite",
+            key="new_suite_name",
+        )
+        suite_desc = st.text_input(
+            "Description",
+            placeholder="e.g. Security-related test cases",
+            key="new_suite_desc",
+        )
+        if st.button("Create Suite", type="primary") and suite_name.strip():
+            create_suite(project, suite_name.strip(), suite_desc.strip())
+            _save_project(project)
+            st.success(f"Created suite: {suite_name}")
+            st.rerun()
+
+    if project.suites:
+        for suite in sorted(project.suites, key=lambda s: s.priority):
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.markdown(f"**{suite.name}**")
+                    st.caption(suite.description or "No description")
+                    st.caption(f"{len(suite.requirement_ids)} requirement(s)")
+                    if suite.requirement_ids:
+                        st.caption(
+                            f"Requirements: {', '.join(suite.requirement_ids[:5])}"
+                            f"{'...' if len(suite.requirement_ids) > 5 else ''}"
+                        )
+                with c2:
+                    if st.button(
+                        "Delete", key=f"del_suite_{suite.id}", type="secondary"
+                    ):
+                        delete_suite(project, suite.id)
+                        _save_project(project)
+                        st.rerun()
+
+        st.divider()
+        st.markdown("### Quick Assign")
+        req_options = {
+            r.id: f"{r.id}: {r.title or r.raw_text[:50]}"
+            for r in project.requirements
+        }
+        sel_assign_reqs = st.multiselect(
+            "Requirements",
+            list(req_options.keys()),
+            format_func=lambda x: req_options[x],
+            key="suite_assign_reqs",
+        )
+        sel_target = st.selectbox(
+            "Target suite",
+            [s.name for s in project.suites],
+            key="suite_assign_target",
+        )
+        c_assign, c_remove = st.columns(2)
+        with c_assign:
+            if (
+                st.button("Assign to Suite", use_container_width=True)
+                and sel_assign_reqs
+            ):
+                suite = next(
+                    (s for s in project.suites if s.name == sel_target), None
+                )
+                if suite:
+                    assign_to_suite(project, suite.id, sel_assign_reqs)
+                    _save_project(project)
+                    st.success(
+                        f"Assigned {len(sel_assign_reqs)} requirement(s) to {sel_target}"
+                    )
+                    st.rerun()
+        with c_remove:
+            if (
+                st.button("Remove from Suite", use_container_width=True)
+                and sel_assign_reqs
+            ):
+                suite = next(
+                    (s for s in project.suites if s.name == sel_target), None
+                )
+                if suite:
+                    from autotestdesign.core.strategy.suite_manager import (
+                        remove_from_suite,
+                    )
+
+                    remove_from_suite(project, suite.id, sel_assign_reqs)
+                    _save_project(project)
+                    st.success(
+                        f"Removed {len(sel_assign_reqs)} requirement(s) from {sel_target}"
+                    )
+                    st.rerun()
+    else:
+        st.info(
+            "No suites yet. Create one above to organize requirements into test suites."
+        )
+
     return project
 
 
 def tab_cases(project: Project) -> Project:
-    st.subheader("5. Test Cases (Interactive)")
+    st.subheader("Test Cases (Interactive)")
     req_ids = [r.id for r in project.requirements]
     sel_req = st.selectbox("Regenerate for requirement", req_ids or ["—"])
     if st.button("Regenerate cases for selected requirement", type="primary") and req_ids:
@@ -1199,6 +1520,7 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
             "Risk",
             "Coverage",
             "Strategy",
+            "Suites",
             "Test Cases",
             "White-Box",
             "Traceability",
@@ -1211,6 +1533,7 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
         tab_risk,
         tab_coverage,
         tab_strategy,
+        tab_suites,
         tab_cases,
         tab_whitebox,
         tab_trace,
