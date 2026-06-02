@@ -102,14 +102,21 @@ class TestRunner:
         mapping_path: str | Path,
         mode: str = "client",
         base_url: str | None = None,
+        filter_tag: str | None = None,
+        filter_suite: str | None = None,
+        filter_tech: str | None = None,
     ):
         self.project_path = Path(project_path)
         self.mapping = json.loads(Path(mapping_path).read_text(encoding="utf-8"))
         self.mode = mode
         self.base_url = base_url or self.mapping.get("base_url", "http://127.0.0.1:5000")
         self._repo_root = Path(__file__).resolve().parents[1]
+        self._filter_tag = filter_tag
+        self._filter_suite = filter_suite
+        self._filter_tech = filter_tech
 
         self._load_project()
+        self._apply_filters()
         self._setup_client()
         self._compile_rules()
 
@@ -121,6 +128,31 @@ class TestRunner:
         data = json.loads(self.project_path.read_text(encoding="utf-8"))
         self.test_cases = data.get("test_cases", [])
         self.requirements = {r["id"]: r for r in data.get("requirements", [])}
+
+    def _apply_filters(self) -> None:
+        """Filter test_cases by tag, suite_id, or technique before execution."""
+        before = len(self.test_cases)
+        if self._filter_tag:
+            tag = self._filter_tag
+            self.test_cases = [
+                tc for tc in self.test_cases
+                if tag in (tc.get("tags") or [])
+            ]
+        if self._filter_suite:
+            sid = self._filter_suite
+            self.test_cases = [
+                tc for tc in self.test_cases
+                if tc.get("suite_id") == sid
+            ]
+        if self._filter_tech:
+            tech = self._filter_tech
+            self.test_cases = [
+                tc for tc in self.test_cases
+                if tc.get("technique", "").upper() == tech.upper()
+            ]
+        after = len(self.test_cases)
+        if before != after:
+            print(f"[filter] {before} → {after} test cases")
 
     def _setup_client(self) -> None:
         self._flask_app = None

@@ -34,6 +34,15 @@ def main() -> None:
         help="SUT base URL (only used in http mode, defaults to mapping config value)",
     )
     parser.add_argument(
+        "--filter-tag", help="Only run test cases with this tag (e.g. #security_suite)"
+    )
+    parser.add_argument(
+        "--filter-suite", help="Only run test cases in this suite (by suite ID, e.g. TS-001)"
+    )
+    parser.add_argument(
+        "--filter-tech", help="Only run test cases using this technique (EP / BVA / DecisionTable / StateTransition)"
+    )
+    parser.add_argument(
         "--output", "-o", help="Save JSON report to file"
     )
     args = parser.parse_args()
@@ -43,6 +52,9 @@ def main() -> None:
         args.mapping,
         mode=args.mode,
         base_url=args.base_url,
+        filter_tag=args.filter_tag,
+        filter_suite=args.filter_suite,
+        filter_tech=args.filter_tech,
     )
     report = runner.run()
     print(report.to_console())
