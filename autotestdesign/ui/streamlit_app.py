@@ -1518,8 +1518,8 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
         [
             "Import",
             "Risk",
-            "Coverage",
             "Strategy",
+            "Coverage",
             "Suites",
             "Test Cases",
             "White-Box",
@@ -1531,8 +1531,8 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
     handlers = [
         tab_import,
         tab_risk,
-        tab_coverage,
         tab_strategy,
+        tab_coverage,
         tab_suites,
         tab_cases,
         tab_whitebox,
