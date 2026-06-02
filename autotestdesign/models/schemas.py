@@ -43,6 +43,8 @@ def seed_ids_from_project(project: "Project") -> None:
         ("TC", project.test_cases),
         ("COV", project.coverage_items),
         ("STR", project.strategies),
+        ("SA", project.strategy_assignments),
+        ("TS", project.suites),
     ]:
         max_n = 0
         for item in items:
@@ -98,6 +100,31 @@ class TestStrategy(BaseModel):
     requirement_ids: list[str] = Field(default_factory=list)
 
 
+class TechniqueParameter(BaseModel):
+    """Configurable parameters for test techniques."""
+    bva_offset: int = Field(default=1, ge=1, le=5)
+    ep_valid_partitions: int = Field(default=1, ge=1, le=5)
+    ep_invalid_partitions: int = Field(default=2, ge=1, le=5)
+
+
+class StrategyAssignment(BaseModel):
+    """Per-requirement technique enablement and parameter override."""
+    id: str = Field(default_factory=lambda: _id("SA"))
+    requirement_id: str = ""
+    technique: str = ""  # "EP" | "BVA" | "DecisionTable" | "StateTransition"
+    enabled: bool = True
+    params: TechniqueParameter = Field(default_factory=TechniqueParameter)
+
+
+class TestSuite(BaseModel):
+    """Logical grouping of requirements into a test suite."""
+    id: str = Field(default_factory=lambda: _id("TS"))
+    name: str = ""
+    description: str = ""
+    requirement_ids: list[str] = Field(default_factory=list)
+    priority: int = 0
+
+
 class TraceLink(BaseModel):
     requirement_id: str = ""
     coverage_id: str = ""
@@ -147,6 +174,8 @@ class TestCase(BaseModel):
     coverage_ids: list[str] = Field(default_factory=list)
     strategy_id: str = ""
     status: str = Field(default="active", description="active | invalid — for evidence-based improvement")
+    tags: list[str] = Field(default_factory=list)
+    suite_id: str = ""
 
     @field_validator("test_data", mode="before")
     @classmethod
@@ -188,6 +217,9 @@ class Project(BaseModel):
     risks: list[RiskAssessment] = Field(default_factory=list)
     coverage_items: list[CoverageItem] = Field(default_factory=list)
     strategies: list[TestStrategy] = Field(default_factory=list)
+    strategy_assignments: list[StrategyAssignment] = Field(default_factory=list)
+    suites: list[TestSuite] = Field(default_factory=list)
+    technique_params: TechniqueParameter = Field(default_factory=TechniqueParameter)
     test_cases: list[TestCase] = Field(default_factory=list)
     trace_links: list[TraceLink] = Field(default_factory=list)
     review_events: list[ReviewEvent] = Field(default_factory=list)
