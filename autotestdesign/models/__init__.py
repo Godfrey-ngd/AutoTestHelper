@@ -5,8 +5,11 @@ from autotestdesign.models.schemas import (
     Requirement,
     ReviewEvent,
     RiskAssessment,
+    StrategyAssignment,
+    TechniqueParameter,
     TestCase,
     TestStrategy,
+    TestSuite,
     TraceLink,
 )
 
@@ -20,4 +23,7 @@ __all__ = [
     "ReviewEvent",
     "TraceLink",
     "Priority",
+    "StrategyAssignment",
+    "TechniqueParameter",
+    "TestSuite",
 ]

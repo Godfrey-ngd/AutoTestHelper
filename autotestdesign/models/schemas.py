@@ -109,7 +109,7 @@ class TechniqueParameter(BaseModel):
 
 class StrategyAssignment(BaseModel):
     """Per-requirement technique enablement and parameter override."""
-    id: str = Field(default_factory=lambda: _id("SA"))
+    id: str = Field(default_factory=lambda: _next_id("SA"))
     requirement_id: str = ""
     technique: str = ""  # "EP" | "BVA" | "DecisionTable" | "StateTransition"
     enabled: bool = True
@@ -118,7 +118,7 @@ class StrategyAssignment(BaseModel):
 
 class TestSuite(BaseModel):
     """Logical grouping of requirements into a test suite."""
-    id: str = Field(default_factory=lambda: _id("TS"))
+    id: str = Field(default_factory=lambda: _next_id("TS"))
     name: str = ""
     description: str = ""
     requirement_ids: list[str] = Field(default_factory=list)
