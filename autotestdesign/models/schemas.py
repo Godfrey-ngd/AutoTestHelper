@@ -18,6 +18,12 @@ class Priority(str, Enum):
     LOW = "L"
 
 
+class TestLevel(str, Enum):
+    COMPREHENSIVE = "comprehensive"
+    STANDARD = "standard"
+    SMOKE = "smoke"
+
+
 def _id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:8]}"
 
@@ -125,6 +131,19 @@ class TestSuite(BaseModel):
     priority: int = 0
 
 
+class TestPlanItem(BaseModel):
+    """Risk-driven test planning: how much effort, what depth, what order."""
+    requirement_id: str = ""
+    risk_level: str = ""  # H / M / L
+    test_level: TestLevel = TestLevel.STANDARD
+    effort_pct: float = 0.0
+    estimated_cases: int = 0
+    priority_order: int = 0  # 1 = first to execute
+    phase: str = "Phase 2: Functional"
+    skip: bool = False
+    notes: str = ""
+
+
 class TraceLink(BaseModel):
     requirement_id: str = ""
     coverage_id: str = ""
@@ -220,6 +239,7 @@ class Project(BaseModel):
     strategy_assignments: list[StrategyAssignment] = Field(default_factory=list)
     suites: list[TestSuite] = Field(default_factory=list)
     technique_params: TechniqueParameter = Field(default_factory=TechniqueParameter)
+    test_plan_items: list[TestPlanItem] = Field(default_factory=list)
     test_cases: list[TestCase] = Field(default_factory=list)
     trace_links: list[TraceLink] = Field(default_factory=list)
     review_events: list[ReviewEvent] = Field(default_factory=list)

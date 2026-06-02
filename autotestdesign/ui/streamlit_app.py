@@ -41,6 +41,8 @@ from autotestdesign.models.schemas import (
     StructuredFields,
     TechniqueParameter,
     TestCase,
+    TestLevel,
+    TestPlanItem,
     TestStrategy,
     TestSuite,
     seed_ids_from_project,
@@ -56,6 +58,7 @@ from autotestdesign.core.strategy.suite_manager import (
     create_suite,
     delete_suite,
 )
+from autotestdesign.core.strategy.test_planner import auto_generate_plan, get_plan_summary
 from autotestdesign.ui.components.technique_selector import render_technique_matrix
 from autotestdesign.storage.project_store import ProjectStore
 
@@ -657,6 +660,133 @@ def tab_coverage(project: Project) -> Project:
                 _save_project(project)
             st.toast("Coverage items saved", icon="✅")
             st.success("Coverage items saved")
+    return project
+
+
+def tab_planning(project: Project) -> Project:
+    st.subheader("Test Planning")
+
+    if not project.requirements:
+        st.info("Import requirements on the Import tab first.")
+        return project
+
+    if not project.risks:
+        st.warning("Run risk assessment first to generate a test plan.")
+        return project
+
+    col_left, col_right = st.columns([3, 2])
+
+    with col_left:
+        st.markdown("### Test Plan")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Auto-Generate Plan", type="primary", use_container_width=True):
+                project.test_plan_items = auto_generate_plan(
+                    project.requirements, project.risks
+                )
+                _save_project(project)
+                st.rerun()
+        with c2:
+            if st.button("Clear Plan", type="secondary", use_container_width=True):
+                project.test_plan_items = []
+                _save_project(project)
+                st.rerun()
+
+        if project.test_plan_items:
+            import pandas as pd
+            phases = sorted(set(it.phase for it in project.test_plan_items))
+            rows = []
+            for it in sorted(project.test_plan_items, key=lambda x: x.priority_order):
+                rows.append({
+                    "Priority": it.priority_order,
+                    "Req ID": it.requirement_id,
+                    "Risk": it.risk_level,
+                    "Test Level": it.test_level.value,
+                    "Effort %": it.effort_pct,
+                    "Phase": it.phase,
+                    "Skip": it.skip,
+                    "Notes": it.notes,
+                })
+            df = pd.DataFrame(rows)
+            edited = st.data_editor(
+                df,
+                column_config={
+                    "Priority": st.column_config.NumberColumn("Priority", width="small"),
+                    "Req ID": st.column_config.TextColumn("Req ID", width="small"),
+                    "Risk": st.column_config.TextColumn("Risk", width="small"),
+                    "Test Level": st.column_config.SelectboxColumn(
+                        "Test Level",
+                        options=["comprehensive", "standard", "smoke"],
+                        width="medium",
+                    ),
+                    "Effort %": st.column_config.NumberColumn("Effort %", width="small", format="%.1f"),
+                    "Phase": st.column_config.SelectboxColumn(
+                        "Phase",
+                        options=phases if phases else ["Phase 1: Smoke", "Phase 2: Functional", "Phase 3: Regression"],
+                        width="medium",
+                    ),
+                    "Skip": st.column_config.CheckboxColumn("Skip", width="small"),
+                    "Notes": st.column_config.TextColumn("Notes", width="medium"),
+                },
+                hide_index=True,
+                use_container_width=True,
+                key="plan_editor",
+                num_rows="fixed",
+            )
+
+            if st.button("Save Plan", type="secondary"):
+                new_items = []
+                for _, row in edited.iterrows():
+                    level_str = str(row.get("Test Level", "standard"))
+                    try:
+                        level = TestLevel(level_str)
+                    except ValueError:
+                        level = TestLevel.STANDARD
+                    new_items.append(TestPlanItem(
+                        requirement_id=str(row.get("Req ID", "")),
+                        risk_level=str(row.get("Risk", "M")),
+                        test_level=level,
+                        effort_pct=float(row.get("Effort %", 0)),
+                        priority_order=int(row.get("Priority", 0)),
+                        phase=str(row.get("Phase", "")),
+                        skip=bool(row.get("Skip", False)),
+                        notes=str(row.get("Notes", "")),
+                    ))
+                project.test_plan_items = new_items
+                _save_project(project)
+                st.success("Plan saved")
+                st.rerun()
+        else:
+            st.info("Click 'Auto-Generate Plan' to create a risk-driven test plan.")
+
+    with col_right:
+        st.markdown("### Plan Summary")
+        if project.test_plan_items:
+            summary = get_plan_summary(project.test_plan_items)
+            st.metric("Total Requirements", summary["total"])
+            c_a, c_s = st.columns(2)
+            with c_a:
+                st.metric("Active", summary["active"])
+            with c_s:
+                st.metric("Skipped", summary["skipped"])
+
+            st.markdown("**By Test Level**")
+            for level, count in summary.get("by_level", {}).items():
+                st.text(f"{level}: {count}")
+
+            st.markdown("**By Phase**")
+            for phase, count in summary.get("by_phase", {}).items():
+                st.text(f"{phase}: {count}")
+
+            st.markdown("**Effort Distribution**")
+            for it in sorted(project.test_plan_items, key=lambda x: x.priority_order):
+                if it.skip:
+                    continue
+                st.text(f"{it.requirement_id} [{it.risk_level}]: {it.effort_pct}%")
+        else:
+            st.info("Generate a plan to see summary.")
+
     return project
 
 
@@ -1518,6 +1648,7 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
         [
             "Import",
             "Risk",
+            "Planning",
             "Strategy",
             "Coverage",
             "Suites",
@@ -1531,6 +1662,7 @@ Target application for this assignment: **Login Web Module** (`target-app/`)
     handlers = [
         tab_import,
         tab_risk,
+        tab_planning,
         tab_strategy,
         tab_coverage,
         tab_suites,

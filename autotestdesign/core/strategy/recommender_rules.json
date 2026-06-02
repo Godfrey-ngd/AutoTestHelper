@@ -16,6 +16,16 @@
       "reason": "Low-risk requirements covered by equivalence partitioning to verify basic input handling"
     }
   ],
+  "test_plan_defaults": {
+    "H": {"test_level": "comprehensive", "effort_pct": 50},
+    "M": {"test_level": "standard", "effort_pct": 35},
+    "L": {"test_level": "smoke", "effort_pct": 15}
+  },
+  "test_phases": [
+    "Phase 1: Smoke",
+    "Phase 2: Functional",
+    "Phase 3: Regression"
+  ],
   "technique_metadata": {
     "EP": {"name": "Equivalence Partitioning", "icon": "⊞"},
     "BVA": {"name": "Boundary Value Analysis", "icon": "⇅"},

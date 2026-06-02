@@ -8,6 +8,8 @@ from autotestdesign.models.schemas import (
     StrategyAssignment,
     TechniqueParameter,
     TestCase,
+    TestLevel,
+    TestPlanItem,
     TestStrategy,
     TestSuite,
     TraceLink,
@@ -26,4 +28,6 @@ __all__ = [
     "StrategyAssignment",
     "TechniqueParameter",
     "TestSuite",
+    "TestLevel",
+    "TestPlanItem",
 ]
