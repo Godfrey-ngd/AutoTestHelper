@@ -30,6 +30,7 @@ def _extract_bounds(text: str) -> list[tuple[str, int, int]]:
 def _fallback(
     requirements: list[Requirement],
     risk_map: dict[str, RiskAssessment],
+    offset=1,
 ) -> TechniqueResult:
     result = TechniqueResult()
     strategy = TestStrategy(
@@ -44,14 +45,10 @@ def _fallback(
         if not bounds:
             bounds = [("field", 1, 10)]
         for field, lo, hi in bounds:
-            cases = [
-                (f"{field} min-1", lo - 1, "invalid"),
-                (f"{field} min", lo, "valid"),
-                (f"{field} min+1", lo + 1, "valid"),
-                (f"{field} max-1", hi - 1, "valid"),
-                (f"{field} max", hi, "valid"),
-                (f"{field} max+1", hi + 1, "invalid"),
-            ]
+            cases = [(f"{field} min", lo, "valid"), (f"{field} max", hi, "valid")]
+            for i in range(1, offset + 1):
+                cases.append((f"{field} min-{i}", lo - i, "invalid"))
+                cases.append((f"{field} max+{i}", hi + i, "invalid"))
             for title, length, validity in cases:
                 val = "x" * max(0, length) if length > 0 else ""
                 if field == "username":
@@ -102,6 +99,7 @@ def generate(
     requirements: list[Requirement],
     risk_map: dict[str, RiskAssessment],
     feedback_cases: list[dict] | None = None,
+    offset=1,
 ) -> TechniqueResult:
     llm = try_llm("boundary_value.md", "BVA", requirements, risk_map, feedback_cases)
-    return llm if llm else _fallback(requirements, risk_map)
+    return llm if llm else _fallback(requirements, risk_map, offset)

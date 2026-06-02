@@ -17,6 +17,8 @@ from autotestdesign.models.schemas import (
 def _fallback(
     requirements: list[Requirement],
     risk_map: dict[str, RiskAssessment],
+    valid_partitions=1,
+    invalid_partitions=2,
 ) -> TechniqueResult:
     result = TechniqueResult()
     strategy = TestStrategy(
@@ -79,6 +81,8 @@ def generate(
     requirements: list[Requirement],
     risk_map: dict[str, RiskAssessment],
     feedback_cases: list[dict] | None = None,
+    valid_partitions=1,
+    invalid_partitions=2,
 ) -> TechniqueResult:
     llm = try_llm("equivalence_partitioning.md", "EP", requirements, risk_map, feedback_cases)
-    return llm if llm else _fallback(requirements, risk_map)
+    return llm if llm else _fallback(requirements, risk_map, valid_partitions, invalid_partitions)
